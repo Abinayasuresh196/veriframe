@@ -30,8 +30,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000",
-        "https://your-app.vercel.app",  # Replace with your actual Vercel domain
-        "*",  # Allow all origins for now (will restrict after frontend deployment)
+        "https://veriframe-frontend.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
