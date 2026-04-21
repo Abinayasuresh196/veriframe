@@ -1,18 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AnalysisId, AnalysisRecord, ShareToken } from "../lib/types";
-import { useActor } from "./useActor";
 import { useAuthContext } from "../contexts/AuthContext";
 import { PythonBackend } from "../lib/pythonBackend";
 
 export function useGetAnalysisResult(id: AnalysisId | null) {
-  const { actor, isFetching } = useActor();
+  const { principal } = useAuthContext();
+  const backend = new PythonBackend(principal);
+  
   return useQuery<AnalysisRecord | null>({
     queryKey: ["analysis", id],
     queryFn: async () => {
-      if (!actor || !id) return null;
-      return actor.getAnalysisResult(id);
+      if (!principal || !id) return null;
+      return backend.getAnalysisResult(id);
     },
-    enabled: !!actor && !isFetching && !!id,
+    enabled: !!principal && !!id,
     refetchInterval: (query) => {
       const data = query.state.data;
       if (data?.status === "Processing" || data?.status === "Queued") {
@@ -37,14 +38,15 @@ export function useGetUserHistory() {
 }
 
 export function useGetSharedAnalysis(token: ShareToken | null) {
-  const { actor, isFetching } = useActor();
+  const backend = new PythonBackend(null);
+  
   return useQuery<AnalysisRecord | null>({
     queryKey: ["sharedAnalysis", token],
     queryFn: async () => {
-      if (!actor || !token) return null;
-      return actor.getSharedAnalysis(token);
+      if (!token) return null;
+      return backend.getSharedAnalysis(token);
     },
-    enabled: !!actor && !isFetching && !!token,
+    enabled: !!token,
   });
 }
 
@@ -99,11 +101,13 @@ export function useDeleteAnalysisRecord() {
 }
 
 export function useGenerateShareToken() {
-  const { actor } = useActor();
+  const { principal } = useAuthContext();
+  const backend = new PythonBackend(principal);
+  
   return useMutation<string, Error, AnalysisId>({
     mutationFn: async (id) => {
-      if (!actor) throw new Error("Actor not available");
-      return actor.generateShareToken(id);
+      if (!principal) throw new Error("User not authenticated");
+      return backend.generateShareToken(id);
     },
   });
 }
