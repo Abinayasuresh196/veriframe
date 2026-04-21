@@ -1,0 +1,13 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+pydantic>=2.11.0
+pydantic-settings>=2.8.0
+python-multipart>=0.0.20
+python-dotenv>=1.0.0
+motor>=3.5.0
+pymongo>=4.5.0
+dnspython>=2.6.0
+cloudinary>=1.41.0
+opencv-python>=4.10.0
+onnxruntime>=1.18.0
+numpy>=1.24.0
