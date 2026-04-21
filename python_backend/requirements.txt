@@ -11,3 +11,4 @@ cloudinary>=1.41.0
 opencv-python>=4.10.0
 onnxruntime>=1.18.0
 numpy>=1.24.0
+requests>=2.31.0
