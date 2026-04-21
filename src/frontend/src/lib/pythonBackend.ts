@@ -12,7 +12,7 @@ interface AuthResponse {
 }
 
 function getApiBaseUrl(): string {
-  const v = import.meta.env.VITE_PYTHON_BACKEND_URL as string | undefined;
+  const v = import.meta.env.VITE_API_URL as string | undefined;
   return v?.trim() || "http://127.0.0.1:8001";
 }
 
