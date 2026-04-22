@@ -47,20 +47,15 @@ async def log_requests(request: Request, call_next):
 async def test_endpoint():
     return {"status": "ok", "message": "Backend is reachable"}
 
-@app.get("/debug/model")
-async def debug_model():
-    """Debug endpoint to check model loading status."""
-    from .deepfake_model import get_deepfake_model
+@app.get("/debug/tensorflow")
+async def debug_tensorflow():
+    """Simple TensorFlow test endpoint."""
     import os
     
-    model = get_deepfake_model()
-    model_path = os.path.join(os.path.dirname(__file__), "..", "models", "deepfake_model.tflite")
-    
     debug_info = {
-        "model_loaded": model.is_available(),
-        "model_path": model_path,
-        "model_file_exists": os.path.exists(model_path),
         "tensorflow_available": False,
+        "model_file_exists": False,
+        "model_path": "",
         "error": None
     }
     
@@ -71,14 +66,24 @@ async def debug_model():
         debug_info["tensorflow_version"] = tf.__version__
     except ImportError as e:
         debug_info["error"] = f"TensorFlow not available: {e}"
+        return debug_info
     
-    # Try to get more model details if loaded
-    if model.is_available():
+    # Check model file
+    model_path = os.path.join(os.path.dirname(__file__), "..", "models", "deepfake_model.tflite")
+    debug_info["model_path"] = model_path
+    debug_info["model_file_exists"] = os.path.exists(model_path)
+    
+    # Try to load TFLite interpreter
+    if debug_info["model_file_exists"]:
         try:
-            debug_info["input_details"] = str(model.input_details)
-            debug_info["output_details"] = str(model.output_details)
+            interpreter = tf.lite.Interpreter(model_path=model_path)
+            interpreter.allocate_tensors()
+            debug_info["tflite_loaded"] = True
+            debug_info["input_details"] = str(interpreter.get_input_details())
+            debug_info["output_details"] = str(interpreter.get_output_details())
         except Exception as e:
-            debug_info["error"] = f"Error getting model details: {e}"
+            debug_info["tflite_loaded"] = False
+            debug_info["error"] = f"TFLite loading error: {e}"
     
     return debug_info
 
