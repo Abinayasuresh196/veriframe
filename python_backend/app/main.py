@@ -29,22 +29,12 @@ app = FastAPI(title=settings.app_name)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://veriframe-frontend.vercel.app",
-        "https://veriframe-frontend.vercel.app/",
+        "https://veriframe-frontend.vercel.app",  # your frontend
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    # Removed verbose logging
-    response = await call_next(request)
-    return response
 
 @app.get("/test")
 async def test_endpoint():
