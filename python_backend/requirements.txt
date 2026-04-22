@@ -9,7 +9,7 @@ pymongo>=4.5.0
 dnspython>=2.6.0
 cloudinary>=1.41.0
 opencv-python>=4.10.0
-tensorflow-cpu>=2.13.0
+tensorflow-cpu==2.15.0
 # Use: pip install --no-cache-dir -r requirements.txt (reduces memory usage)
 numpy>=1.24.0
 requests>=2.31.0
