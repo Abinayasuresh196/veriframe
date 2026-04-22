@@ -42,22 +42,41 @@ class DeepfakeModel:
             if os.path.exists(model_path):
                 try:
                     import tensorflow as tf
+                    print(f"[Model] TensorFlow version: {tf.__version__}")
+                    
+                    # Optimize TensorFlow for Render's memory constraints
+                    tf.config.set_experimental_options(
+                        {'mlir_bridge_rounding': 64}
+                    )
+                    
                     # Set memory growth to avoid OOM on Render
                     gpus = tf.config.experimental.list_physical_devices('GPU')
                     if gpus:
                         for gpu in gpus:
                             tf.config.experimental.set_memory_growth(gpu, True)
                     
-                    self.interpreter = tf.lite.Interpreter(model_path=model_path)
+                    # Load TFLite model with memory optimizations
+                    self.interpreter = tf.lite.Interpreter(
+                        model_path=model_path,
+                        experimental_delegates=[],
+                        num_threads=1  # Limit threads for memory efficiency
+                    )
                     self.interpreter.allocate_tensors()
                     self.input_details = self.interpreter.get_input_details()
                     self.output_details = self.interpreter.get_output_details()
                     self.model_loaded = True
                     self.use_onnx = False
                     print(f"[Model] ✅ TensorFlow TFLite model loaded from: {model_path}")
+                    print(f"[Model] Input shape: {self.input_details[0]['shape']}")
+                    print(f"[Model] Output shape: {self.output_details[0]['shape']}")
                     return True
-                except ImportError:
-                    print("[Model] TensorFlow not installed. Using simulated analysis.")
+                except ImportError as e:
+                    print(f"[Model] TensorFlow import error: {e}")
+                    print("[Model] Using simulated analysis.")
+                    return False
+                except Exception as e:
+                    print(f"[Model] TensorFlow loading error: {e}")
+                    print("[Model] Falling back to simulation mode.")
                     return False
             
             print(f"[Model] Model file not found at: {model_path}")
