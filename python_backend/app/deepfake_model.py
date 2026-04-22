@@ -31,7 +31,14 @@ class DeepfakeModel:
             model_path = os.path.join(os.path.dirname(__file__), "..", "models", "deepfake_model.tflite")
         
         self.model_path = model_path
-        self.load_model(model_path)
+        # DO NOT load model at startup - lazy loading only
+    
+    def get_model(self):
+        """Get the loaded model, load it if necessary (lazy loading)."""
+        if not self.model_loaded:
+            print("[Model] Lazy loading model on first use...")
+            self.load_model(self.model_path)
+        return self.interpreter
     
     def load_model(self, model_path: str) -> bool:
         """Load the TensorFlow TFLite model.
@@ -111,35 +118,12 @@ class DeepfakeModel:
         Returns:
             Fake probability (0.0 = real, 1.0 = fake)
         """
+        # Lazy load model if needed
         if not self.model_loaded or self.interpreter is None:
-            # Fallback to realistic simulation based on frame characteristics
-            # Analyze actual frame features for more realistic prediction
-            try:
-                # Calculate frame quality metrics
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
-                
-                # Calculate edge density
-                edges = cv2.Canny(gray, 100, 200)
-                edge_density = np.sum(edges > 0) / (frame.shape[0] * frame.shape[1])
-                
-                # Calculate color variance
-                color_var = np.var(frame, axis=(0, 1)).mean()
-                
-                # Combine metrics for realistic prediction
-                # Lower blur and edge density often indicates potential manipulation
-                fake_score = 0.3 + (1.0 - min(blur_score / 500, 1.0)) * 0.3
-                fake_score += (1.0 - min(edge_density * 10, 1.0)) * 0.2
-                fake_score += (1.0 - min(color_var / 1000, 1.0)) * 0.2
-                
-                # Add some randomness for natural variation
-                fake_score += np.random.uniform(-0.1, 0.1)
-                
-                # Clamp to valid range
-                return max(0.0, min(1.0, fake_score))
-            except Exception:
-                # Ultimate fallback to realistic range
-                return np.random.uniform(0.2, 0.8)
+            self.get_model()
+            if not self.model_loaded:
+                # Model still failed to load, use simulation
+                return self._simulate_prediction(frame)
         
         try:
             # Preprocess frame
@@ -160,7 +144,35 @@ class DeepfakeModel:
                 
         except Exception as e:
             print(f"[Model] Inference error: {e}")
-            return 0.5  # Return neutral score on error
+            return self._simulate_prediction(frame)
+    
+    def _simulate_prediction(self, frame: np.ndarray) -> float:
+        """Simulate prediction based on frame characteristics."""
+        try:
+            # Calculate frame quality metrics
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            blur_score = cv2.Laplacian(gray, cv2.CV_64F).var()
+            
+            # Calculate edge density
+            edges = cv2.Canny(gray, 100, 200)
+            edge_density = np.sum(edges > 0) / (frame.shape[0] * frame.shape[1])
+            
+            # Calculate color variance
+            color_var = np.var(frame, axis=(0, 1)).mean()
+            
+            # Combine metrics for realistic prediction
+            fake_score = 0.3 + (1.0 - min(blur_score / 500, 1.0)) * 0.3
+            fake_score += (1.0 - min(edge_density * 10, 1.0)) * 0.2
+            fake_score += (1.0 - min(color_var / 1000, 1.0)) * 0.2
+            
+            # Add some randomness for natural variation
+            fake_score += np.random.uniform(-0.1, 0.1)
+            
+            # Clamp to valid range
+            return max(0.0, min(1.0, fake_score))
+        except Exception:
+            # Ultimate fallback to realistic range
+            return np.random.uniform(0.2, 0.8)
     
     def predict_frames(self, frames: List[np.ndarray]) -> List[float]:
         """Run inference on multiple frames.

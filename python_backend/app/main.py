@@ -36,6 +36,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def health():
+    return {"status": "alive", "message": "Backend is running"}
+
 @app.get("/test")
 async def test_endpoint():
     return {"status": "ok", "message": "Backend is reachable"}
