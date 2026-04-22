@@ -32,10 +32,12 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:3000",
         "https://veriframe-frontend.vercel.app",
+        "https://veriframe-frontend.vercel.app/",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 @app.middleware("http")
