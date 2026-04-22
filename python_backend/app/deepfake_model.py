@@ -12,6 +12,8 @@ load_dotenv()
 class DeepfakeModel:
     """Service for deepfake detection using TFLite model."""
     
+    # Deployment timestamp: 2026-04-22T12:46:00Z - Force deployment update
+    
     def __init__(self, model_path: Optional[str] = None):
         """Initialize the DeepfakeModel.
         
