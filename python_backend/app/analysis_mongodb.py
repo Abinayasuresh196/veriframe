@@ -172,30 +172,30 @@ class MongoDBAnalysis:
             high_ratio = float(np.sum(scores > 0.6)) / len(scores)
             total_frames = len(scores)
 
-            # 🔥 FINAL PRODUCTION LOGIC (Clean Structure)
+            # 🔥 BALANCED PRODUCTION LOGIC (Less Aggressive)
             print(f"[DEBUG] avg={avg:.3f}, high_ratio={high_ratio:.3f}")
             
-            if avg < 0.23:
+            if avg < 0.15:
                 verdict = "Fake"
-                print(f"[DEBUG] Rule 1: avg < 0.23 → {verdict}")
-            elif avg > 0.50:
-                if high_ratio > 0.35:
+                print(f"[DEBUG] Rule 1: avg < 0.15 → {verdict}")
+            elif avg > 0.70:
+                if high_ratio > 0.50:
                     verdict = "Fake"   # animation / over-smooth
-                    print(f"[DEBUG] Rule 2a: avg > 0.50 AND high_ratio > 0.35 → {verdict}")
+                    print(f"[DEBUG] Rule 2a: avg > 0.70 AND high_ratio > 0.50 → {verdict}")
                 else:
                     verdict = "Real"
-                    print(f"[DEBUG] Rule 2b: avg > 0.50 AND high_ratio ≤ 0.35 → {verdict}")
-            elif avg > 0.34:
+                    print(f"[DEBUG] Rule 2b: avg > 0.70 AND high_ratio ≤ 0.50 → {verdict}")
+            elif avg > 0.40:
                 verdict = "Real"
-                print(f"[DEBUG] Rule 3: avg > 0.34 → {verdict}")
+                print(f"[DEBUG] Rule 3: avg > 0.40 → {verdict}")
             else:
                 # middle zone
-                if high_ratio >= 0.10:
+                if high_ratio >= 0.30:
                     verdict = "Fake"
-                    print(f"[DEBUG] Rule 4a: middle zone AND high_ratio ≥ 0.10 → {verdict}")
+                    print(f"[DEBUG] Rule 4a: middle zone AND high_ratio ≥ 0.30 → {verdict}")
                 else:
                     verdict = "Real"
-                    print(f"[DEBUG] Rule 4b: middle zone AND high_ratio < 0.10 → {verdict}")
+                    print(f"[DEBUG] Rule 4b: middle zone AND high_ratio < 0.30 → {verdict}")
 
             # Fix confidence to be properly aligned with original verdict logic
             if verdict == "Fake":
