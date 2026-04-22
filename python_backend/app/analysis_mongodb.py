@@ -172,16 +172,15 @@ class MongoDBAnalysis:
             high_ratio = float(np.sum(scores > 0.6)) / len(scores)
             total_frames = len(scores)
 
-            # 🔥 FINAL UNIVERSAL LOGIC (ALL CASES) - Original user logic
+            # 🔥 FINAL PRODUCTION LOGIC (Clean Structure)
             print(f"[DEBUG] avg={avg:.3f}, high_ratio={high_ratio:.3f}")
             
             if avg < 0.23:
                 verdict = "Fake"
                 print(f"[DEBUG] Rule 1: avg < 0.23 → {verdict}")
             elif avg > 0.50:
-                # 🔥 NEW RULE (animation / over-smooth fake)
                 if high_ratio > 0.35:
-                    verdict = "Fake"
+                    verdict = "Fake"   # animation / over-smooth
                     print(f"[DEBUG] Rule 2a: avg > 0.50 AND high_ratio > 0.35 → {verdict}")
                 else:
                     verdict = "Real"
