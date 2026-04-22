@@ -366,30 +366,30 @@ async def process_video_analysis(
                         high_ratio = float(np.sum(scores > 0.6)) / len(scores)
                         total_frames = len(scores)
 
-                        # 🔥 BALANCED PRODUCTION LOGIC (Less Aggressive)
+                        # 🔥 FINAL BALANCED PRODUCTION LOGIC (Stable)
                         print(f"[DEBUG] avg={avg:.3f}, high_ratio={high_ratio:.3f}")
                         
-                        if avg < 0.15:
+                        if avg < 0.20:
                             verdict = "Fake"
-                            print(f"[DEBUG] Rule 1: avg < 0.15 → {verdict}")
-                        elif avg > 0.70:
-                            if high_ratio > 0.50:
+                            print(f"[DEBUG] Rule 1: avg < 0.20 → {verdict}")
+                        elif avg > 0.50:
+                            if high_ratio > 0.30:
                                 verdict = "Fake"   # animation / over-smooth
-                                print(f"[DEBUG] Rule 2a: avg > 0.70 AND high_ratio > 0.50 → {verdict}")
+                                print(f"[DEBUG] Rule 2a: avg > 0.50 AND high_ratio > 0.30 → {verdict}")
                             else:
                                 verdict = "Real"
-                                print(f"[DEBUG] Rule 2b: avg > 0.70 AND high_ratio ≤ 0.50 → {verdict}")
-                        elif avg > 0.40:
+                                print(f"[DEBUG] Rule 2b: avg > 0.50 AND high_ratio ≤ 0.30 → {verdict}")
+                        elif avg > 0.32:
                             verdict = "Real"
-                            print(f"[DEBUG] Rule 3: avg > 0.40 → {verdict}")
+                            print(f"[DEBUG] Rule 3: avg > 0.32 → {verdict}")
                         else:
                             # middle zone
-                            if high_ratio >= 0.30:
+                            if high_ratio >= 0.12:
                                 verdict = "Fake"
-                                print(f"[DEBUG] Rule 4a: middle zone AND high_ratio ≥ 0.30 → {verdict}")
+                                print(f"[DEBUG] Rule 4a: middle zone AND high_ratio ≥ 0.12 → {verdict}")
                             else:
                                 verdict = "Real"
-                                print(f"[DEBUG] Rule 4b: middle zone AND high_ratio < 0.30 → {verdict}")
+                                print(f"[DEBUG] Rule 4b: middle zone AND high_ratio < 0.12 → {verdict}")
 
                         # Fix confidence to be properly aligned with original verdict logic
                         if verdict == "Fake":
