@@ -392,12 +392,24 @@ async def process_video_analysis(
                                 verdict = "Real"
                                 print(f"[DEBUG] Rule 4b: middle zone AND high_ratio < 0.10 → {verdict}")
 
-                        # Fix confidence to be consistent with verdict
+                        # Fix confidence to be properly aligned with verdict logic
                         if verdict == "Fake":
-                            confidence = int(avg * 100)  # High confidence for fake
+                            # For Fake verdict, confidence should be high when avg is clearly in Fake zones
+                            if avg < 0.23:
+                                confidence = int((0.23 - avg) / 0.23 * 50 + 50)  # 50-100% confidence
+                            elif avg > 0.50 and high_ratio > 0.35:
+                                confidence = int((avg - 0.50) / 0.50 * 50 + 50)  # 50-100% confidence
+                            else:  # middle zone Fake
+                                confidence = int((high_ratio - 0.10) / 0.40 * 50 + 50)  # 50-100% confidence
                             avg_score = avg
                         else:
-                            confidence = int((1 - avg) * 100)  # High confidence for real
+                            # For Real verdict, confidence should be high when avg is clearly in Real zones
+                            if avg > 0.50 and high_ratio <= 0.35:
+                                confidence = int((avg - 0.50) / 0.50 * 50 + 50)  # 50-100% confidence
+                            elif avg > 0.34:
+                                confidence = int((avg - 0.34) / 0.66 * 50 + 50)  # 50-100% confidence
+                            else:  # middle zone Real
+                                confidence = int((0.10 - high_ratio) / 0.10 * 50 + 50)  # 50-100% confidence
                             avg_score = avg
 
                         overall_score = int(avg_score * 100)
