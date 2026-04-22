@@ -87,6 +87,38 @@ async def debug_tensorflow():
     
     return debug_info
 
+@app.get("/debug/frame-analysis")
+async def debug_frame_analysis():
+    """Test frame analysis with the loaded model."""
+    from .deepfake_model import get_deepfake_model
+    import numpy as np
+    
+    debug_info = {
+        "model_available": False,
+        "frame_prediction_test": False,
+        "error": None
+    }
+    
+    try:
+        model = get_deepfake_model()
+        debug_info["model_available"] = model.is_available()
+        
+        if model.is_available():
+            # Test single frame prediction
+            test_frame = np.random.randint(0, 255, (48, 48, 3), dtype=np.uint8)
+            prediction = model.predict_frame(test_frame)
+            debug_info["frame_prediction_test"] = True
+            debug_info["test_prediction"] = float(prediction)
+            debug_info["model_details"] = {
+                "input_shape": str(model.input_details[0]["shape"]) if model.input_details else None,
+                "output_shape": str(model.output_details[0]["shape"]) if model.output_details else None
+            }
+        
+    except Exception as e:
+        debug_info["error"] = str(e)
+    
+    return debug_info
+
 @app.post("/test-upload")
 async def test_upload(file: UploadFile = Form(...)):
     # Removed verbose logging
