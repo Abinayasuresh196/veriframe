@@ -26,19 +26,18 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 app = FastAPI(title=settings.app_name)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://veriframe-frontend.vercel.app",
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=600,
-)
+@app.middleware("http")
+async def add_cors_middleware(request: Request, call_next):
+    response = await call_next(request)
+    
+    # Force CORS headers for all responses
+    response.headers["Access-Control-Allow-Origin"] = "https://veriframe-frontend.vercel.app"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD, PATCH"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Max-Age"] = "600"
+    
+    return response
 
 @app.options("/analysis/submit")
 async def options_submit():
