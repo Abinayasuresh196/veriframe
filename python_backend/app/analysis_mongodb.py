@@ -129,12 +129,20 @@ class MongoDBAnalysis:
     def _model_analysis(self, video_path: str, filename: str, metadata: Dict[str, Any], extracted_frames: Dict[int, str] = None, model=None):
         """Analyze video using the actual deepfake model."""
         try:
+            print(f"[Analysis] Starting model analysis for: {video_path}")
+            print(f"[Analysis] Model available: {model.is_available()}")
+            
             # Analyze frames using the model
             frame_results = model.analyze_video_frames(video_path, max_frames=30)
             
+            print(f"[Analysis] Frame analysis complete. Results: {frame_results}")
+            
             if not frame_results or len(frame_results) == 0:
+                print(f"[Analysis] Frame analysis returned empty results, falling back to simulation")
                 # Fallback to simulation if model analysis fails
                 return self._simulate_analysis(filename, metadata.get("fileSize", 0), metadata, extracted_frames)
+            
+            print(f"[Analysis] Processing {len(frame_results)} frame results")
             
             # Final distribution-based verdict logic
             import numpy as np
