@@ -1,8 +1,10 @@
 """Deepfake detection model inference service using TFLite."""
 
 import os
-import numpy as np
 import cv2
+import numpy as np
+import tensorflow as tf
+import gc
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 
@@ -53,6 +55,11 @@ class DeepfakeModel:
                         for gpu in gpus:
                             tf.config.experimental.set_memory_growth(gpu, True)
                     
+                    # Configure TensorFlow for memory efficiency
+                    tf.config.set_memory_growth(
+                        tf.config.experimental.list_physical_devices('GPU')[0], True
+                    ) if tf.config.experimental.list_physical_devices('GPU') else None
+                    
                     # Load TFLite model with memory optimizations
                     self.interpreter = tf.lite.Interpreter(
                         model_path=model_path,
@@ -64,6 +71,10 @@ class DeepfakeModel:
                     self.output_details = self.interpreter.get_output_details()
                     self.model_loaded = True
                     self.use_onnx = False
+                    
+                    # Force garbage collection to free memory
+                    gc.collect()
+                    
                     print(f"[Model] ✅ TensorFlow TFLite model loaded from: {model_path}")
                     print(f"[Model] Input shape: {self.input_details[0]['shape']}")
                     print(f"[Model] Output shape: {self.output_details[0]['shape']}")
@@ -141,6 +152,10 @@ class DeepfakeModel:
             self.interpreter.set_tensor(self.input_details[0]["index"], input_data)
             self.interpreter.invoke()
             output = self.interpreter.get_tensor(self.output_details[0]["index"])
+            
+            # Clean up input data to free memory
+            del input_data
+            
             return float(output[0][0])
                 
         except Exception as e:
@@ -156,7 +171,21 @@ class DeepfakeModel:
         Returns:
             List of fake probabilities
         """
-        return [self.predict_frame(frame) for frame in frames]
+        results = []
+        for i, frame in enumerate(frames):
+            result = self.predict_frame(frame)
+            results.append(result)
+            
+            # Clean up frame to free memory
+            del frame
+            
+            # Force garbage collection every 5 frames
+            if (i + 1) % 5 == 0:
+                gc.collect()
+        
+        # Final cleanup
+        gc.collect()
+        return results
     
     def _extract_frames_with_ffmpeg(
         self,
