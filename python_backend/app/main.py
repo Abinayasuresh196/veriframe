@@ -30,11 +30,19 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://veriframe-frontend.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,
 )
+
+@app.options("/analysis/submit")
+async def options_submit():
+    return {"status": "ok"}
 
 @app.get("/")
 def health():
