@@ -366,39 +366,50 @@ async def process_video_analysis(
                         high_ratio = float(np.sum(scores > 0.6)) / len(scores)
                         total_frames = len(scores)
 
-                        # ✅ FINAL STABLE LOGIC (FIXED THRESHOLDS)
+                        # 🔥 FINAL UNIVERSAL LOGIC (ALL CASES) - Original user logic
                         print(f"[DEBUG] avg={avg:.3f}, high_ratio={high_ratio:.3f}")
                         
-                        if avg < 0.35:
-                            verdict = "Real"
-                            print(f"[DEBUG] Rule 1: avg < 0.35 → {verdict}")
-                        elif avg > 0.65:
+                        if avg < 0.23:
                             verdict = "Fake"
-                            print(f"[DEBUG] Rule 2: avg > 0.65 → {verdict}")
-                        else:
-                            # middle zone (0.35-0.65) → use frame agreement
-                            fake_ratio = high_ratio  # high_ratio represents fake frame ratio
-                            if fake_ratio > 0.4:
+                            print(f"[DEBUG] Rule 1: avg < 0.23 → {verdict}")
+                        elif avg > 0.50:
+                            # 🔥 NEW RULE (animation / over-smooth fake)
+                            if high_ratio > 0.35:
                                 verdict = "Fake"
-                                print(f"[DEBUG] Rule 3a: middle zone AND fake_ratio > 0.4 → {verdict}")
+                                print(f"[DEBUG] Rule 2a: avg > 0.50 AND high_ratio > 0.35 → {verdict}")
                             else:
                                 verdict = "Real"
-                                print(f"[DEBUG] Rule 3b: middle zone AND fake_ratio ≤ 0.4 → {verdict}")
+                                print(f"[DEBUG] Rule 2b: avg > 0.50 AND high_ratio ≤ 0.35 → {verdict}")
+                        elif avg > 0.34:
+                            verdict = "Real"
+                            print(f"[DEBUG] Rule 3: avg > 0.34 → {verdict}")
+                        else:
+                            # middle zone
+                            if high_ratio >= 0.10:
+                                verdict = "Fake"
+                                print(f"[DEBUG] Rule 4a: middle zone AND high_ratio ≥ 0.10 → {verdict}")
+                            else:
+                                verdict = "Real"
+                                print(f"[DEBUG] Rule 4b: middle zone AND high_ratio < 0.10 → {verdict}")
 
-                        # Fix confidence to be properly aligned with new verdict logic
+                        # Fix confidence to be properly aligned with original verdict logic
                         if verdict == "Fake":
-                            # For Fake verdict, confidence should be high when clearly in Fake zones
-                            if avg > 0.65:
-                                confidence = int((avg - 0.65) / 0.35 * 50 + 50)  # 50-100% confidence
-                            else:  # middle zone Fake (fake_ratio > 0.4)
-                                confidence = int((fake_ratio - 0.4) / 0.6 * 50 + 50)  # 50-100% confidence
+                            # For Fake verdict, confidence should be high when avg is clearly in Fake zones
+                            if avg < 0.23:
+                                confidence = int((0.23 - avg) / 0.23 * 50 + 50)  # 50-100% confidence
+                            elif avg > 0.50 and high_ratio > 0.35:
+                                confidence = int((avg - 0.50) / 0.50 * 50 + 50)  # 50-100% confidence
+                            else:  # middle zone Fake
+                                confidence = int((high_ratio - 0.10) / 0.40 * 50 + 50)  # 50-100% confidence
                             avg_score = avg
                         else:
-                            # For Real verdict, confidence should be high when clearly in Real zones
-                            if avg < 0.35:
-                                confidence = int((0.35 - avg) / 0.35 * 50 + 50)  # 50-100% confidence
-                            else:  # middle zone Real (fake_ratio ≤ 0.4)
-                                confidence = int((0.4 - fake_ratio) / 0.4 * 50 + 50)  # 50-100% confidence
+                            # For Real verdict, confidence should be high when avg is clearly in Real zones
+                            if avg > 0.50 and high_ratio <= 0.35:
+                                confidence = int((avg - 0.50) / 0.50 * 50 + 50)  # 50-100% confidence
+                            elif avg > 0.34:
+                                confidence = int((avg - 0.34) / 0.66 * 50 + 50)  # 50-100% confidence
+                            else:  # middle zone Real
+                                confidence = int((0.10 - high_ratio) / 0.10 * 50 + 50)  # 50-100% confidence
                             avg_score = avg
 
                         overall_score = int(avg_score * 100)
