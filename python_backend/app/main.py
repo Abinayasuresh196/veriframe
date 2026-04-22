@@ -326,13 +326,16 @@ async def process_video_analysis(
             from .deepfake_model import get_deepfake_model
             model = get_deepfake_model()
             print(f"[background] Model available: {model.is_available()}, Video path exists: {local_video_path is not None}")
-            if model.is_available() and local_video_path:
+            
+            # Always analyze frames and upload to Cloudinary (regardless of model availability)
+            if local_video_path:
                 try:
                     frame_results = model.analyze_video_frames(local_video_path, max_frames=30)
                     print(f"[background] Model analysis returned {len(frame_results) if frame_results else 0} frame results")
+                    
+                    # Always upload frames to Cloudinary if analysis succeeded
                     if frame_results:
-                        # Extract and upload frames using the same indices as model analysis
-                        print(f"[background] Extracting frames for {len(frame_results)} analyzed frames")
+                        print(f"[background] Extracting and uploading frames for {len(frame_results)} analyzed frames")
                         extractor = FrameExtractor()
                         model_frame_indices = [r["frame_index"] for r in frame_results]
                         frames = extractor.extract_frames(
