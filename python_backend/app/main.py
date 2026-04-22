@@ -373,12 +373,13 @@ async def process_video_analysis(
                             print(f"[DEBUG] Rule 1: avg < 0.23 → {verdict}")
                         elif avg > 0.50:
                             # 🔥 NEW RULE (animation / over-smooth fake)
-                            if high_ratio > 0.35:
+                            # Animation typically has very high high_ratio (>0.6) due to uniform smoothness
+                            if high_ratio > 0.6:
                                 verdict = "Fake"
-                                print(f"[DEBUG] Rule 2a: avg > 0.50 AND high_ratio > 0.35 → {verdict}")
+                                print(f"[DEBUG] Rule 2a: avg > 0.50 AND high_ratio > 0.6 → {verdict}")
                             else:
                                 verdict = "Real"
-                                print(f"[DEBUG] Rule 2b: avg > 0.50 AND high_ratio ≤ 0.35 → {verdict}")
+                                print(f"[DEBUG] Rule 2b: avg > 0.50 AND high_ratio ≤ 0.6 → {verdict}")
                         elif avg > 0.34:
                             verdict = "Real"
                             print(f"[DEBUG] Rule 3: avg > 0.34 → {verdict}")
