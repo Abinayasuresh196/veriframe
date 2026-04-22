@@ -173,22 +173,30 @@ class MongoDBAnalysis:
             total_frames = len(scores)
 
             # 🔥 FINAL UNIVERSAL LOGIC (ALL CASES)
+            print(f"[DEBUG] avg={avg:.3f}, high_ratio={high_ratio:.3f}")
+            
             if avg < 0.23:
                 verdict = "Fake"
+                print(f"[DEBUG] Rule 1: avg < 0.23 → {verdict}")
             elif avg > 0.50:
                 # 🔥 NEW RULE (animation / over-smooth fake)
                 if high_ratio > 0.35:
                     verdict = "Fake"
+                    print(f"[DEBUG] Rule 2a: avg > 0.50 AND high_ratio > 0.35 → {verdict}")
                 else:
                     verdict = "Real"
+                    print(f"[DEBUG] Rule 2b: avg > 0.50 AND high_ratio ≤ 0.35 → {verdict}")
             elif avg > 0.34:
                 verdict = "Real"
+                print(f"[DEBUG] Rule 3: avg > 0.34 → {verdict}")
             else:
                 # middle zone
                 if high_ratio >= 0.10:
                     verdict = "Fake"
+                    print(f"[DEBUG] Rule 4a: middle zone AND high_ratio ≥ 0.10 → {verdict}")
                 else:
                     verdict = "Real"
+                    print(f"[DEBUG] Rule 4b: middle zone AND high_ratio < 0.10 → {verdict}")
 
             confidence = int(abs(avg - 0.5) * 2 * 100)
 
