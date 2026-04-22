@@ -13,10 +13,10 @@ class DeepfakeModel:
     """Service for deepfake detection using TFLite model."""
     
     def __init__(self, model_path: Optional[str] = None):
-        """Initialize the TFLite model.
+        """Initialize the DeepfakeModel.
         
         Args:
-            model_path: Path to the .tflite model file. If None, uses default path.
+            model_path: Path to the model file (.tflite)
         """
         self.interpreter = None
         self.input_details = None
@@ -26,6 +26,7 @@ class DeepfakeModel:
         if model_path is None:
             model_path = os.path.join(os.path.dirname(__file__), "..", "models", "deepfake_model.tflite")
         
+        self.model_path = model_path
         self.load_model(model_path)
     
     def load_model(self, model_path: str) -> bool:
