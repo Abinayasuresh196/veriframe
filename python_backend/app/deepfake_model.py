@@ -45,11 +45,6 @@ class DeepfakeModel:
                     import tensorflow as tf
                     print(f"[Model] TensorFlow version: {tf.__version__}")
                     
-                    # Optimize TensorFlow for Render's memory constraints
-                    tf.config.set_experimental_options(
-                        {'mlir_bridge_rounding': 64}
-                    )
-                    
                     # Set memory growth to avoid OOM on Render
                     gpus = tf.config.experimental.list_physical_devices('GPU')
                     if gpus:
