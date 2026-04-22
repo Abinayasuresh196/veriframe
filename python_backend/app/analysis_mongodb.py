@@ -172,17 +172,23 @@ class MongoDBAnalysis:
             high_ratio = float(np.sum(scores > 0.6)) / len(scores)
             total_frames = len(scores)
 
-            # STEP 3: FINAL DECISION (UNIVERSAL LOGIC)
+            # 🔥 FINAL UNIVERSAL LOGIC (ALL CASES)
             if avg < 0.23:
                 verdict = "Fake"
             elif avg > 0.50:
-                # Animation / over-smooth fake detection
-                verdict = "Fake" if high_ratio > 0.35 else "Real"
+                # 🔥 NEW RULE (animation / over-smooth fake)
+                if high_ratio > 0.35:
+                    verdict = "Fake"
+                else:
+                    verdict = "Real"
             elif avg > 0.34:
                 verdict = "Real"
             else:
-                # MIDDLE ZONE: strict high_ratio check
-                verdict = "Fake" if high_ratio >= 0.10 else "Real"
+                # middle zone
+                if high_ratio >= 0.10:
+                    verdict = "Fake"
+                else:
+                    verdict = "Real"
 
             confidence = int(abs(avg - 0.5) * 2 * 100)
 
