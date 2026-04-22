@@ -29,39 +29,32 @@ class DeepfakeModel:
         self.load_model(model_path)
     
     def load_model(self, model_path: str) -> bool:
-        """Load the ONNX or TFLite model.
+        """Load the TensorFlow TFLite model.
         
         Args:
-            model_path: Path to the model file (.onnx or .tflite)
+            model_path: Path to the model file (.tflite)
             
         Returns:
             True if model loaded successfully, False otherwise
         """
         try:
-            import onnxruntime as ort
-            
-            # Check for ONNX model first
-            onnx_path = model_path.replace('.tflite', '.onnx')
-            if os.path.exists(onnx_path):
-                self.interpreter = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
-                self.input_name = self.interpreter.get_inputs()[0].name
-                self.output_name = self.interpreter.get_outputs()[0].name
-                self.model_loaded = True
-                self.use_onnx = True
-                print(f"[Model] ✅ ONNX model loaded from: {onnx_path}")
-                return True
-            
-            # Fall back to TFLite if ONNX not available
+            # Try TensorFlow TFLite first
             if os.path.exists(model_path):
                 try:
                     import tensorflow as tf
+                    # Set memory growth to avoid OOM on Render
+                    gpus = tf.config.experimental.list_physical_devices('GPU')
+                    if gpus:
+                        for gpu in gpus:
+                            tf.config.experimental.set_memory_growth(gpu, True)
+                    
                     self.interpreter = tf.lite.Interpreter(model_path=model_path)
                     self.interpreter.allocate_tensors()
                     self.input_details = self.interpreter.get_input_details()
                     self.output_details = self.interpreter.get_output_details()
                     self.model_loaded = True
                     self.use_onnx = False
-                    print(f"[Model] ✅ TFLite model loaded from: {model_path}")
+                    print(f"[Model] ✅ TensorFlow TFLite model loaded from: {model_path}")
                     return True
                 except ImportError:
                     print("[Model] TensorFlow not installed. Using simulated analysis.")
@@ -126,17 +119,11 @@ class DeepfakeModel:
             frame_normalized = frame_rgb.astype("float32") / 255.0
             input_data = np.expand_dims(frame_normalized, axis=0)  # (1, 48, 48, 3)
             
-            # Run inference based on model type
-            if hasattr(self, 'use_onnx') and self.use_onnx:
-                # ONNX Runtime inference
-                output = self.interpreter.run([self.output_name], {self.input_name: input_data})[0]
-                return float(output[0][0])
-            else:
-                # TFLite inference
-                self.interpreter.set_tensor(self.input_details[0]["index"], input_data)
-                self.interpreter.invoke()
-                output = self.interpreter.get_tensor(self.output_details[0]["index"])
-                return float(output[0][0])
+            # TensorFlow TFLite inference
+            self.interpreter.set_tensor(self.input_details[0]["index"], input_data)
+            self.interpreter.invoke()
+            output = self.interpreter.get_tensor(self.output_details[0]["index"])
+            return float(output[0][0])
                 
         except Exception as e:
             print(f"[Model] Inference error: {e}")

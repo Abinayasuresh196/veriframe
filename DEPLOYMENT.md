@@ -81,7 +81,7 @@ web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
 3. **Configure Build & Runtime**
    - **Root Directory**: `python_backend`
    - **Runtime**: Python 3
-   - **Build Command**: `pip install -r requirements.txt`
+   - **Build Command**: `pip install --no-cache-dir -r requirements.txt`
    - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 
 4. **Configure Environment Variables**
@@ -203,18 +203,18 @@ uvicorn app.main:app --host 0.0.0.0 --port $PORT
 
 Update `Procfile`:
 ```
-web: bash start.sh
+web: bash start_tensorflow.sh
 ```
 
-Make `start.sh` executable:
+Make startup scripts executable:
 ```bash
-chmod +x python_backend/start.sh
+chmod +x python_backend/start_tensorflow.sh
 ```
 
 Push changes:
 ```bash
-git add python_backend/start.sh python_backend/Procfile
-git commit -m "Add FFmpeg support for Render"
+git add python_backend/start_tensorflow.sh python_backend/Procfile
+git commit -m "Add TensorFlow optimizations for Render"
 git push
 ```
 
@@ -259,6 +259,50 @@ curl -X POST https://your-app.onrender.com/auth/login \
 2. Add your custom domain
 3. Update DNS records as instructed
 4. Update frontend `.env.production` with new backend URL
+
+---
+
+## **TensorFlow Memory Optimization for Render Free Tier**
+
+### **Critical Settings for 512MB RAM**
+
+Your app is now optimized with TensorFlow-CPU and these memory settings:
+
+1. **Build Command**: Use `--no-cache-dir` flag (already updated above)
+2. **tensorflow-cpu**: Uses CPU-only version (much lighter than full TensorFlow)
+3. **Memory Growth**: GPU memory growth is disabled to avoid OOM
+4. **Thread Limiting**: TensorFlow limited to 1 thread to reduce memory usage
+5. **Startup Script**: Uses `start_tensorflow.sh` with optimizations
+
+### **TensorFlow Environment Variables**
+
+The `start_tensorflow.sh` script sets these critical variables:
+```bash
+export TF_CPP_MIN_LOG_LEVEL="3"          # Reduce logging
+export TF_FORCE_GPU_ALLOW_GROWTH="true"  # Memory management
+export TF_ALLOCATOR="cpu"                # Force CPU on free tier
+export OMP_NUM_THREADS=1                 # Limit threads
+export TF_NUM_INTEROP_THREADS=1          # Limit TensorFlow threads
+export TF_INTRA_OP_PARALLELISM_THREADS=1 # Limit parallelism
+```
+
+### **If You Still Hit Memory Limits**
+
+Option A: Reduce frame analysis count
+```python
+# In deepfake_model.py, change max_frames from 15 to 10
+max_frames: int = 10
+```
+
+Option B: Use TFLite Runtime (lighter than TensorFlow)
+```bash
+# Replace tensorflow-cpu with tflite-runtime in requirements.txt
+pip install --no-cache-dir tflite-runtime
+```
+
+Option C: Move inference to frontend (TensorFlow.js)
+- Eliminates server memory usage entirely
+- Model runs in user's browser
 
 ---
 
