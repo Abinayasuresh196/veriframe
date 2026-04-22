@@ -29,19 +29,12 @@ app = FastAPI(title=settings.app_name)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://veriframe-frontend.vercel.app",  # your frontend
-        "http://localhost:5173",  # local development
-        "http://localhost:3000",  # local development
-        "*",  # temporary for debugging
+        "https://veriframe-frontend.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.options("/{path:path}")
-async def options_handler(path: str):
-    return {"status": "ok"}
 
 @app.get("/test")
 async def test_endpoint():
