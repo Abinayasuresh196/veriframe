@@ -119,12 +119,10 @@ class MongoDBAnalysis:
         """Analyze video using the trained deepfake detection model."""
         model = get_deepfake_model()
         
-        # Use model if available, otherwise fall back to simulation
-        if model.is_available():
-            return self._model_analysis(video_path, filename, metadata, extracted_frames, model)
-        else:
-            print("[Analysis] Model not available, using simulation")
-            return self._simulate_analysis(filename, metadata.get("fileSize", 0), metadata, extracted_frames)
+        # Always try model analysis first - it has fallback to enhanced simulation built-in
+        # This bypasses the model availability check that's failing on Render
+        print(f"[Analysis] Starting analysis (model available: {model.is_available()})")
+        return self._model_analysis(video_path, filename, metadata, extracted_frames, model)
     
     def _model_analysis(self, video_path: str, filename: str, metadata: Dict[str, Any], extracted_frames: Dict[int, str] = None, model=None):
         """Analyze video using the actual deepfake model."""
