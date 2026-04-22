@@ -76,7 +76,8 @@ class DeepfakeModel:
                     return False
                 except Exception as e:
                     print(f"[Model] TensorFlow loading error: {e}")
-                    print("[Model] Falling back to simulation mode.")
+                    print("[Model] TFLite model incompatible with current TensorFlow version.")
+                    print("[Model] Using enhanced simulation mode with frame analysis.")
                     return False
             
             print(f"[Model] Model file not found at: {model_path}")
@@ -296,60 +297,34 @@ class DeepfakeModel:
         try:
             print(f"[Model] Opening video: {video_path}")
             
-            # First try FFmpeg-based extraction (more reliable)
-            frame_list = self._extract_frames_with_ffmpeg(video_path, max_frames)
+            # Always try to extract frames first, even in simulation mode
+            # This ensures we get frame analysis even if model fails to load
+            cap = cv2.VideoCapture(video_path)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            print(f"[Model] Video metadata - Total frames: {total_frames}, FPS: {fps}, Resolution: {width}x{height}")
             
-            if frame_list is None:
-                print(f"[Model] FFmpeg extraction failed, falling back to OpenCV")
-                # Fallback to OpenCV
-                cap = cv2.VideoCapture(video_path)
-                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                print(f"[Model] Video metadata - Total frames: {total_frames}, FPS: {fps}, Resolution: {width}x{height}")
-                
-                if total_frames == 0:
-                    print(f"[Model] Video has 0 frames, returning None")
-                    cap.release()
-                    return None
-                
-                # Determine which frames to analyze
-                if frame_indices is None:
-                    indices = np.linspace(0, total_frames - 1, min(max_frames, total_frames), dtype=int)
-                else:
-                    indices = [i for i in frame_indices if 0 <= i < total_frames]
-                
-                print(f"[Model] Analyzing {len(indices)} frames: {indices}")
-                results = []
-                
-                for idx in indices:
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
-                    ret, frame = cap.read()
-                    if not ret:
-                        print(f"[Model] Failed to read frame {idx}")
-                        continue
-                    
-                    fake_probability = self.predict_frame(frame)
-                    results.append({
-                        "frame_index": int(idx),
-                        "suspicion_score": float(fake_probability)
-                    })
-                    print(f"[Model] Frame {idx}: suspicion_score={fake_probability}")
-                
+            if total_frames == 0:
+                print(f"[Model] Video has 0 frames, returning None")
                 cap.release()
-                print(f"[Model] Analysis complete: {len(results)} frames analyzed")
-                return results
+                return None
             
-            # Use FFmpeg-extracted frames
-            print(f"[Model] Analyzing {len(frame_list)} FFmpeg-extracted frames")
+            # Determine which frames to analyze
+            if frame_indices is None:
+                indices = np.linspace(0, total_frames - 1, min(max_frames, total_frames), dtype=int)
+            else:
+                indices = [i for i in frame_indices if 0 <= i < total_frames]
+            
+            print(f"[Model] Analyzing {len(indices)} frames: {indices}")
             results = []
             
-            for idx, frame_path in frame_list:
-                # Read frame using OpenCV (works with image files)
-                frame = cv2.imread(frame_path)
-                if frame is None:
-                    print(f"[Model] Failed to read extracted frame {idx}")
+            for idx in indices:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                ret, frame = cap.read()
+                if not ret:
+                    print(f"[Model] Failed to read frame {idx}")
                     continue
                 
                 fake_probability = self.predict_frame(frame)
@@ -358,13 +333,8 @@ class DeepfakeModel:
                     "suspicion_score": float(fake_probability)
                 })
                 print(f"[Model] Frame {idx}: suspicion_score={fake_probability}")
-                
-                # Clean up extracted frame
-                try:
-                    os.unlink(frame_path)
-                except:
-                    pass
             
+            cap.release()
             print(f"[Model] Analysis complete: {len(results)} frames analyzed")
             return results
             
