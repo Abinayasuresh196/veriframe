@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import tensorflow as tf
 import gc
+import psutil
 from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 
@@ -35,6 +36,17 @@ class DeepfakeModel:
     
     def get_model(self):
         """Get the loaded model, load it if necessary (lazy loading)."""
+        # Check memory usage before loading
+        process = psutil.Process()
+        memory_mb = process.memory_info().rss / 1024 / 1024
+        print(f"[Memory] Current usage: {memory_mb:.1f}MB")
+        
+        if memory_mb > 400:  # Close to limit
+            print("[Memory] Usage high, forcing garbage collection...")
+            gc.collect()
+            memory_mb = process.memory_info().rss / 1024 / 1024
+            print(f"[Memory] After GC: {memory_mb:.1f}MB")
+        
         if not self.model_loaded:
             print("[Model] Lazy loading model on first use...")
             self.load_model(self.model_path)
@@ -191,9 +203,15 @@ class DeepfakeModel:
             # Clean up frame to free memory
             del frame
             
-            # Force garbage collection every 5 frames
-            if (i + 1) % 5 == 0:
+            # Force garbage collection every 3 frames (more aggressive)
+            if (i + 1) % 3 == 0:
                 gc.collect()
+                # Check memory after cleanup
+                process = psutil.Process()
+                memory_mb = process.memory_info().rss / 1024 / 1024
+                if memory_mb > 450:  # Very close to limit
+                    print(f"[Memory] Warning: {memory_mb:.1f}MB - aggressive cleanup")
+                    gc.collect()  # Double cleanup
         
         # Final cleanup
         gc.collect()
