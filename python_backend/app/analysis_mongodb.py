@@ -59,6 +59,9 @@ class MongoDBAnalysis:
             if video_path:
                 try:
                     print(f"[analysis] Starting frame extraction from: {filename}")
+                    print(f"[analysis] Video path: {video_path}")
+                    print(f"[analysis] Video path exists: {os.path.exists(video_path) if video_path else 'No path'}")
+                    
                     extractor = FrameExtractor()
                     frames = extractor.extract_frames(
                         video_path,
@@ -66,13 +69,19 @@ class MongoDBAnalysis:
                         quality=95,  # High quality JPEG
                         filename=filename  # Pass filename for unique Cloudinary public_id
                     )
+                    print(f"[analysis] Frame extraction returned: {frames}")
+                    
                     # Create mapping of frame index to URL
                     for frame_idx, frame_url in frames:
                         extracted_frames[frame_idx] = frame_url
                     print(f"[analysis] ✅ Successfully extracted {len(frames)} frames from video")
+                    print(f"[analysis] Extracted frames mapping: {extracted_frames}")
                 except Exception as e:
-                    # Removed verbose logging
-                    pass  # Fall back to simulation if extraction fails
+                    print(f"[analysis] ❌ Frame extraction failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    print(f"[analysis] Continuing without extracted frames...")
+                    # Fall back to simulation if extraction fails
             else:
                 # Removed verbose logging
                 pass
