@@ -595,7 +595,6 @@ async def process_video_analysis(
                     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                     cap.release()
-                    overall_score, verdict, forensic = 50, "Uncertain", {}
                     # Update frame_analysis safely for exception case
                     frame_analysis["frameCount"] = frame_count
                     frame_analysis["flaggedFrames"] = []
