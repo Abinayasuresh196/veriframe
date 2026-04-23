@@ -140,7 +140,7 @@ class MongoDBAnalysis:
             print(f"[Analysis] Model available: {model.is_available()}")
             
             # Analyze frames using the model
-            frame_results = model.analyze_video_frames(video_path, max_frames=15)
+            frame_results = model.analyze_video_frames(video_path, max_frames=10)
             
             print(f"[Analysis] Frame analysis complete. Results: {frame_results}")
             print(f"[Analysis] Frame results type: {type(frame_results)}")

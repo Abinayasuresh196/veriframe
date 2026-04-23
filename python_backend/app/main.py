@@ -28,9 +28,12 @@ app = FastAPI(title=settings.app_name)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://veriframe-frontend.vercel.app"],
+    allow_origins=[
+        "https://veriframe-frontend.vercel.app",
+        "http://localhost:5173"
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -340,17 +343,23 @@ async def process_video_analysis(
                 "faceTrackingData": []
             }
             
+            # Initialize variables to prevent UnboundLocalError
+            overall_score = 50
+            verdict = "Uncertain"
+            forensic = {}
+            confidence = 50
+            
             # Always analyze frames and upload to Cloudinary (regardless of model availability)
             if local_video_path:
                 try:
-                    frame_results = model.analyze_video_frames(local_video_path, max_frames=15)
+                    frame_results = model.analyze_video_frames(local_video_path, max_frames=10)
                     print(f"[background] Model analysis returned {len(frame_results) if frame_results else 0} frame results")
                 except Exception as e:
                     print(f"[background] Model analysis failed: {e}")
                     frame_results = None
-                    
-                    # Always upload frames to Cloudinary if analysis succeeded
-                    if frame_results:
+            
+            # Always upload frames to Cloudinary if analysis succeeded
+            if frame_results and len(frame_results) > 0:
                         print(f"[background] Extracting and uploading frames for {len(frame_results)} analyzed frames")
                         extractor = FrameExtractor()
                         model_frame_indices = [r["frame_index"] for r in frame_results]
@@ -372,7 +381,13 @@ async def process_video_analysis(
                         scores = np.array(frame_scores)
 
                         # STEP 1: Normalize (remove bias)
-                        scores = (scores - np.min(scores)) / (np.max(scores) - np.min(scores) + 1e-6)
+                        min_s = float(np.min(scores))
+                        max_s = float(np.max(scores))
+
+                        if max_s - min_s < 1e-6:
+                            scores = np.zeros_like(scores)
+                        else:
+                            scores = (scores - min_s) / (max_s - min_s)
 
                         # STEP 2: Remove outliers (trim top/bottom 10%)
                         sorted_scores = np.sort(scores)
@@ -524,7 +539,8 @@ async def process_video_analysis(
                                     frame_url = f"https://picsum.photos/seed/veriframe_{analysis_id}_{frame_idx}/320/180"
 
                                 # Frame verdict should align with overall verdict for consistency
-                                flagged_frames.append({
+                                if len(flagged_frames) < 10:
+                                    flagged_frames.append({
                                     "frameIndex": frame_idx,
                                     "suspicionScore": norm_score,  # Use normalized score
                                     "extractedFrame": frame_url,
@@ -554,7 +570,8 @@ async def process_video_analysis(
                                 else:
                                     frame_verdict = "Uncertain"
                                 
-                                flagged_frames.append({
+                                if len(flagged_frames) < 10:
+                                    flagged_frames.append({
                                     "frameIndex": frame_idx,
                                     "suspicionScore": frame_score,
                                     "extractedFrame": frame_url,
@@ -567,9 +584,9 @@ async def process_video_analysis(
                         frame_analysis["resolution"] = f"{width}x{height}"
                         frame_analysis["frameRate"] = fps
                         frame_analysis["colorAnomalyScore"] = overall_score / 100
-                        frame_analysis["faceTrackingData"] = [{"frame": r["frame_index"], "confidence": 1.0 - float(normalized_scores[i])} for i, r in enumerate(frame_results)]
+                        frame_analysis["faceTrackingData"] = []
                         print(f"[background] Frame analysis data: frame_count={frame_count}, fps={fps}, resolution={width}x{height}")
-                    else:
+                else:
                         print(f"[background] No frame results from model, using fallback")
                         # Still populate frame analysis with video metadata
                         import cv2
@@ -587,9 +604,9 @@ async def process_video_analysis(
                         frame_analysis["frameRate"] = fps
                         frame_analysis["colorAnomalyScore"] = 0.5
                         frame_analysis["faceTrackingData"] = []
-                except Exception as e:
-                    print(f"[background] Model analysis error: {e}")
-                    # Still populate frame analysis with video metadata
+            except Exception as e:
+                print(f"[background] Model analysis error: {e}")
+                # Still populate frame analysis with video metadata
                     import cv2
                     cap = cv2.VideoCapture(local_video_path)
                     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
