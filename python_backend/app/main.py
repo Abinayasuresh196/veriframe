@@ -46,6 +46,10 @@ async def test_endpoint():
 async def test_submit_endpoint():
     return {"status": "ok", "message": "Submit endpoint path is working"}
 
+@app.post("/submit")
+async def simple_submit():
+    return {"status": "ok", "message": "Simple submit endpoint working"}
+
 @app.get("/debug/tensorflow")
 async def debug_tensorflow():
     """Simple TensorFlow test endpoint."""
