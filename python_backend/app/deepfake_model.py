@@ -228,16 +228,20 @@ class DeepfakeModel:
                 noise_score * 0.1        # Noise patterns
             )
             
-            # Apply very conservative scaling - real videos should get much lower scores
-            fake_probability = base_probability * 0.3  # Much more conservative
+            # Apply extremely conservative scaling - real videos should get very low scores
+            fake_probability = base_probability * 0.1  # Extremely conservative
             
-            # Add strong bias towards real for typical mobile videos
+            # Add very strong bias towards real for typical mobile videos
             if frame.shape[1] < 1080 or frame.shape[0] < 1080:  # Low resolution
-                fake_probability *= 0.5  # Even more conservative for mobile
+                fake_probability *= 0.3  # Very conservative for mobile
             
             # Additional bias for WhatsApp-style videos (compression artifacts)
             if frame.shape[1] < 720 or frame.shape[0] < 720:  # Very low resolution
-                fake_probability *= 0.7  # Extra conservative for heavily compressed videos
+                fake_probability *= 0.5  # Extra conservative for heavily compressed videos
+            
+            # Maximum protection for typical WhatsApp videos (640x480)
+            if frame.shape[1] <= 640 or frame.shape[0] <= 480:
+                fake_probability *= 0.2  # Ultra conservative for WhatsApp resolution
             
             return max(0.0, min(1.0, fake_probability))
             
