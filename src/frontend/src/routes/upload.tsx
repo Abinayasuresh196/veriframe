@@ -19,7 +19,11 @@ import { useAuthContext } from "../contexts/AuthContext";
 import { useSubmitVideoAnalysis } from "../hooks/useAnalysis";
 import { useAnalysisStore } from "../stores/analysisStore";
 
-export const Route = undefined;
+import { createFileRoute } from "@tanstack/react-router";
+
+export const Route = createFileRoute("/upload")({
+  component: UploadPageComponent,
+}) as any;
 
 const MAX_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
 const ACCEPTED_TYPES = [

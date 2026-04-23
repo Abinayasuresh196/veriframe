@@ -762,6 +762,15 @@ async def submit_video_analysis(
     print("[DEBUG] Submit endpoint called!")
     print(f"[DEBUG] Filename: {filename}")
     print(f"[DEBUG] File size: {fileSize}")
+    
+    # Check file size limit (50MB max for Render)
+    max_size_bytes = 50 * 1024 * 1024  # 50MB
+    if file.size and file.size > max_size_bytes:
+        raise HTTPException(
+            status_code=413, 
+            detail=f"File too large. Maximum size is {max_size_bytes // (1024*1024)}MB"
+        )
+    
     # Removed verbose logging
     
     # Try MongoDB first, fallback to local storage
@@ -780,16 +789,22 @@ async def submit_video_analysis(
     owner = _resolve_owner(x_user_id)
     # Removed verbose logging
 
-    # Save uploaded file temporarily
+    # Save uploaded file temporarily (streaming to prevent memory issues)
     import tempfile
     import os
+    import aiofiles
     
     temp_file_path = None
     try:
-        # Create temporary file
+        # Create temporary file and stream content
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
-            temp_file.write(await file.read())
             temp_file_path = temp_file.name
+        
+        # Stream file content in chunks to avoid memory overload
+        async with aiofiles.open(temp_file_path, 'wb') as f:
+            chunk_size = 1024 * 1024  # 1MB chunks
+            while chunk := await file.read(chunk_size):
+                await f.write(chunk)
         # Removed verbose logging
         
         # Upload to Cloudinary
