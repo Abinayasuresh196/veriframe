@@ -526,11 +526,20 @@ async def process_video_analysis(
                                 frame_idx = r["frame_index"]
                                 frame_url = extracted_frames.get(frame_idx) or f"https://picsum.photos/seed/veriframe_{analysis_id}_{frame_idx}/320/180"
                                 
+                                # Individual frame verdict based on suspicion score
+                                frame_score = float(normalized_scores[i])
+                                if frame_score < 0.30:
+                                    frame_verdict = "Real"
+                                elif frame_score > 0.70:
+                                    frame_verdict = "Fake"
+                                else:
+                                    frame_verdict = "Uncertain"
+                                
                                 flagged_frames.append({
                                     "frameIndex": frame_idx,
-                                    "suspicionScore": float(normalized_scores[i]),  # Use normalized score
+                                    "suspicionScore": frame_score,
                                     "extractedFrame": frame_url,
-                                    "verdict": verdict  # Use overall verdict for consistency
+                                    "verdict": frame_verdict  # Individual frame verdict
                                 })
                         
                         frame_analysis = {

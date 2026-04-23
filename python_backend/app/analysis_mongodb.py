@@ -300,12 +300,20 @@ class MongoDBAnalysis:
                     if not frame_url:
                         frame_url = f"https://picsum.photos/seed/veriframe_{filename}_{frame_result['frame_index']}/320/180"
                     
-                    # Frame verdict should align with overall verdict for consistency
+                    # Individual frame verdict based on suspicion score
+                    frame_score = frame_result["suspicion_score"]
+                    if frame_score < 0.30:
+                        frame_verdict = "Real"
+                    elif frame_score > 0.70:
+                        frame_verdict = "Fake"
+                    else:
+                        frame_verdict = "Uncertain"
+                    
                     flagged_frames.append({
                         "frameIndex": frame_result["frame_index"],
                         "suspicionScore": frame_result["suspicion_score"],
                         "extractedFrame": frame_url,
-                        "verdict": verdict  # Use overall verdict for consistency
+                        "verdict": frame_verdict  # Individual frame verdict
                     })
             
             # If no frames flagged, flag some frames to show analysis (consistent with verdict)
@@ -320,11 +328,20 @@ class MongoDBAnalysis:
                     if not frame_url:
                         frame_url = f"https://picsum.photos/seed/veriframe_{filename}_{frame_result['frame_index']}/320/180"
                     
+                    # Individual frame verdict based on suspicion score
+                    frame_score = frame_result["suspicion_score"]
+                    if frame_score < 0.30:
+                        frame_verdict = "Real"
+                    elif frame_score > 0.70:
+                        frame_verdict = "Fake"
+                    else:
+                        frame_verdict = "Uncertain"
+                    
                     flagged_frames.append({
                         "frameIndex": frame_result["frame_index"],
                         "suspicionScore": frame_result["suspicion_score"],
                         "extractedFrame": frame_url,
-                        "verdict": verdict  # Use overall verdict for consistency
+                        "verdict": frame_verdict  # Individual frame verdict
                     })
             
             frame_analysis = {
