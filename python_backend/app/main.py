@@ -45,6 +45,10 @@ def health():
 async def test_endpoint():
     return {"status": "ok", "message": "Backend is reachable"}
 
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "message": "Backend is healthy"}
+
 @app.post("/analysis/submit/test")
 async def test_submit_endpoint():
     return {"status": "ok", "message": "Submit endpoint path is working"}
@@ -354,33 +358,32 @@ async def process_video_analysis(
                 try:
                     frame_results = model.analyze_video_frames(local_video_path, max_frames=10)
                     print(f"[background] Model analysis returned {len(frame_results) if frame_results else 0} frame results")
-                except Exception as e:
-                    print(f"[background] Model analysis failed: {e}")
-                    frame_results = None
-            
-            # Always upload frames to Cloudinary if analysis succeeded
-            if frame_results and len(frame_results) > 0:
-                        print(f"[background] Extracting and uploading frames for {len(frame_results)} analyzed frames")
+                    
+                    if frame_results and len(frame_results) > 0:
+                        print(f"[background] Processing {len(frame_results)} frames")
+
+                        from .frame_extractor import FrameExtractor
                         extractor = FrameExtractor()
                         model_frame_indices = [r["frame_index"] for r in frame_results]
+
                         frames = extractor.extract_frames(
                             local_video_path,
-                            num_frames=len(model_frame_indices),
+                            num_frames=min(len(model_frame_indices), 10),
                             quality=95,
                             filename=filename,
                             frame_indices=model_frame_indices
                         )
+
                         for frame_idx, frame_url in frames:
                             extracted_frames[frame_idx] = frame_url
-                        print(f"[background] ✅ Extracted {len(frames)} frames to Cloudinary")
 
-                        # Robust verdict logic with outlier handling
+                        print(f"[background] ✅ Extracted {len(frames)} frames")
+
+                        # ---- SAFE ANALYSIS ----
                         import numpy as np
 
-                        frame_scores = [r["suspicion_score"] for r in frame_results]
-                        scores = np.array(frame_scores)
+                        scores = np.array([r["suspicion_score"] for r in frame_results])
 
-                        # STEP 1: Normalize (remove bias)
                         min_s = float(np.min(scores))
                         max_s = float(np.max(scores))
 
@@ -389,260 +392,65 @@ async def process_video_analysis(
                         else:
                             scores = (scores - min_s) / (max_s - min_s)
 
-                        # STEP 2: Remove outliers (trim top/bottom 10%)
                         sorted_scores = np.sort(scores)
                         n = len(sorted_scores)
-                        trim_start = int(0.1 * n)
-                        trim_end = int(0.9 * n)
-                        trimmed_scores = sorted_scores[trim_start:trim_end]
-                        
-                        # STEP 3: Calculate robust average from trimmed scores
-                        avg = float(np.mean(trimmed_scores))
-                        std = float(np.std(trimmed_scores))
 
-                        # STEP 4: Consensus logic - percent of high suspicious frames
+                        trimmed = sorted_scores[int(0.1*n):int(0.9*n)]
+
+                        if len(trimmed) == 0:
+                            trimmed = sorted_scores
+
+                        avg = float(np.mean(trimmed))
+                        std = float(np.std(trimmed))
+
                         fake_votes = int(np.sum(scores > 0.6))
                         fake_ratio = fake_votes / len(scores)
-                        total_frames = len(scores)
-                        
-                        print(f"[ROBUST ANALYSIS] Original avg: {float(np.mean(scores)):.3f}, Trimmed avg: {avg:.3f}")
-                        print(f"[ROBUST ANALYSIS] Fake votes: {fake_votes}/{len(scores)} ({fake_ratio:.2f})")
-                        print(f"[ROBUST ANALYSIS] Std deviation: {std:.3f} (flat pattern detection)")
 
-                        # 🔥 MOBILE-SMART PRODUCTION LOGIC
-                        # Detect if video is low quality (typical for mobile/WhatsApp)
-                        compression_artifacts = 0.2  # Default value since frame_analysis is not yet created
-                        resolution_str = metadata.get("resolution", "1920x1080")
-                        
-                        # Parse resolution to get width
-                        try:
-                            resolution_width = int(resolution_str.split('x')[0])
-                        except:
-                            resolution_width = 1920  # default
-                        
-                        is_low_quality = (resolution_width < 1080) or (compression_artifacts > 0.15)
-                        
-                        print(f"[DEBUG] avg={avg:.3f}, fake_ratio={fake_ratio:.3f}")
-                        print(f"[DEBUG] resolution_width={resolution_width}, compression_artifacts={compression_artifacts:.3f}")
-                        print(f"[DEBUG] is_low_quality={is_low_quality}")
-                        
-                        # FINAL HYBRID LOGIC (robust to outliers + animation detection)
+                        # FINAL LOGIC
                         if avg < 0.25:
                             verdict = "Real"
-                            print(f"[HYBRID] Rule 1: trimmed avg < 0.25 → {verdict}")
                         elif avg > 0.6:
                             verdict = "Fake"
-                            print(f"[HYBRID] Rule 2: trimmed avg > 0.6 → {verdict}")
                         else:
-                            # Middle zone - NEW: detect animation / non-human patterns
                             if std < 0.12:
                                 verdict = "Fake"
-                                print(f"[HYBRID] Rule 3: middle zone AND std < 0.12 → {verdict} (flat pattern = animation)")
                             elif fake_ratio > 0.4:
                                 verdict = "Fake"
-                                print(f"[HYBRID] Rule 4: middle zone AND fake_ratio > 0.4 → {verdict}")
                             else:
                                 verdict = "Real"
-                                print(f"[HYBRID] Rule 5: middle zone → {verdict}")
-                        
-                        print(f"[HYBRID FINAL] Verdict: {verdict}, Trimmed avg: {avg:.3f}, Fake ratio: {fake_ratio:.2f}, Std: {std:.3f}")
 
-                        # Fix confidence to be properly aligned with hybrid verdict logic
-                        if verdict == "Fake":
-                            # For Fake verdict, confidence should be high when avg is clearly in Fake zones
-                            if avg > 0.7:
-                                confidence = int((avg - 0.6) / 0.4 * 50 + 50)  # 50-100% confidence
-                            elif std < 0.12:  # Animation detection
-                                confidence = int((0.12 - std) / 0.12 * 50 + 50)  # 50-100% confidence
-                            else:  # middle zone Fake
-                                confidence = int((fake_ratio - 0.4) / 0.6 * 50 + 50)  # 50-100% confidence
-                            avg_score = avg
-                        else:
-                            # For Real verdict, confidence should be high when avg is clearly in Real zones
-                            if avg < 0.15:
-                                confidence = int((0.25 - avg) / 0.25 * 50 + 50)  # 50-100% confidence
-                            else:  # middle zone Real
-                                confidence = int((0.4 - fake_ratio) / 0.4 * 50 + 50)  # 50-100% confidence
-                            avg_score = avg
+                        overall_score = int(avg * 100)
 
-                        overall_score = int(avg_score * 100)
-
-                        # DEBUG
-                        print("------ FINAL DEBUG ------")
-                        print("Normalized:", scores[:10])
-                        print("AVG:", avg)
-                        print("STD:", std)
-                        print("Fake ratio:", fake_ratio)
-                        print("Verdict:", verdict)
-                        print("Confidence:", confidence)
-                        print("-------------------------")
-
-                        print(f"[background] Verdict: {verdict} (avg={avg:.3f}, confidence={confidence}%)")
-
-                        # Populate forensic data based on VERDICT for consistency
-                        fake_votes = int(fake_ratio * total_frames)
-                        
-                        # Forensic metrics consistent with verdict
-                        if verdict == "Fake":
-                            frame_insertion_risk = random.uniform(0.6, 0.9)
-                            frame_deletion_risk = random.uniform(0.4, 0.7)
-                            temporal_score = random.uniform(0.6, 0.9)
-                        else:
-                            frame_insertion_risk = random.uniform(0.1, 0.3)
-                            frame_deletion_risk = random.uniform(0.05, 0.2)
-                            temporal_score = random.uniform(0.1, 0.3)
-                        
-                        forensic = {
-                            "deepfakeProbability": avg_score,
-                            "confidence": confidence,
-                            "highFakeFrames": fake_votes,
-                            "frameInsertionRisk": frame_insertion_risk,
-                            "frameDeletionRisk": frame_deletion_risk,
-                            "temporalInconsistencyScore": temporal_score,
-                            "compressionArtifactScore": 0.2,
-                            "audioVideoSyncScore": 0.3
-                        }
-                        
-                        # Populate frame analysis data
-                        import cv2
-                        cap = cv2.VideoCapture(local_video_path)
-                        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                        fps = int(cap.get(cv2.CAP_PROP_FPS))
-                        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                        print(f"[background] Video metadata - FPS: {fps}, Frame count: {frame_count}, Resolution: {width}x{height}")
-                        cap.release()
-                        
-                        # Build flagged frames with extractedFrame URLs using normalized scores
+                        # Update frame_analysis with flagged frames
                         flagged_frames = []
-                        # Re-calculate normalized scores for frame flagging
-                        frame_scores = np.array([r["suspicion_score"] for r in frame_results])
-                        normalized_scores = (frame_scores - np.min(frame_scores)) / (np.max(frame_scores) - np.min(frame_scores) + 1e-6)
 
-                        for i, r in enumerate(frame_results):
-                            norm_score = float(normalized_scores[i])
-                            # Flag frames based on verdict consistency
-                            should_flag = False
-                            if verdict == "Fake" and norm_score > 0.3:  # Lower threshold for fake
-                                should_flag = True
-                            elif verdict == "Real" and norm_score > 0.7:  # Higher threshold for real
-                                should_flag = True
-                            
-                            if should_flag:
-                                frame_idx = r["frame_index"]
-                                frame_url = None
-                                # Try to get Cloudinary URL from extracted frames
-                                if frame_idx in extracted_frames:
-                                    frame_url = extracted_frames[frame_idx]
-                                # Fallback to placeholder if no URL
-                                if not frame_url:
-                                    frame_url = f"https://picsum.photos/seed/veriframe_{analysis_id}_{frame_idx}/320/180"
-
-                                # Frame verdict should align with overall verdict for consistency
-                                if len(flagged_frames) < 10:
-                                    flagged_frames.append({
-                                    "frameIndex": frame_idx,
-                                    "suspicionScore": norm_score,  # Use normalized score
-                                    "extractedFrame": frame_url,
-                                    "verdict": verdict  # Use overall verdict for consistency
+                        for i, s in enumerate(scores):
+                            if s > 0.6 and len(flagged_frames) < 10:
+                                flagged_frames.append({
+                                    "frameIndex": int(i),
+                                    "suspicionScore": float(s),
+                                    "extractedFrame": extracted_frames.get(i)
                                 })
 
-                        # If no frames flagged, flag some frames to show analysis (consistent with verdict)
-                        if len(flagged_frames) == 0:
-                            if verdict == "Fake":
-                                frames_to_flag = frame_results[:3]
-                            elif verdict == "Real":
-                                frames_to_flag = frame_results[:2]
-                            else:  # Uncertain - show frames with most extreme scores
-                                # Sort by distance from 0.5 (most uncertain)
-                                frames_sorted = sorted(frame_results, key=lambda x: abs(x["suspicion_score"] - 0.5), reverse=True)
-                                frames_to_flag = frames_sorted[:3]
-                            for i, r in enumerate(frames_to_flag):
-                                frame_idx = r["frame_index"]
-                                frame_url = extracted_frames.get(frame_idx) or f"https://picsum.photos/seed/veriframe_{analysis_id}_{frame_idx}/320/180"
-                                
-                                # Individual frame verdict based on suspicion score
-                                frame_score = float(normalized_scores[i])
-                                if frame_score < 0.30:
-                                    frame_verdict = "Real"
-                                elif frame_score > 0.70:
-                                    frame_verdict = "Fake"
-                                else:
-                                    frame_verdict = "Uncertain"
-                                
-                                if len(flagged_frames) < 10:
-                                    flagged_frames.append({
-                                    "frameIndex": frame_idx,
-                                    "suspicionScore": frame_score,
-                                    "extractedFrame": frame_url,
-                                    "verdict": frame_verdict  # Individual frame verdict
-                                })
-                        
-                        # Update frame_analysis safely instead of overwriting
-                        frame_analysis["frameCount"] = frame_count
-                        frame_analysis["flaggedFrames"] = flagged_frames
-                        frame_analysis["resolution"] = f"{width}x{height}"
-                        frame_analysis["frameRate"] = fps
-                        frame_analysis["colorAnomalyScore"] = overall_score / 100
-                        frame_analysis["faceTrackingData"] = []
-                        print(f"[background] Frame analysis data: frame_count={frame_count}, fps={fps}, resolution={width}x{height}")
-                else:
-                        print(f"[background] No frame results from model, using fallback")
-                        # Still populate frame analysis with video metadata
-                        import cv2
-                        cap = cv2.VideoCapture(local_video_path)
-                        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                        fps = int(cap.get(cv2.CAP_PROP_FPS))
-                        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                        cap.release()
-                        overall_score, verdict, forensic = 50, "Uncertain", {}
-                        # Update frame_analysis safely for fallback case
-                        frame_analysis["frameCount"] = frame_count
-                        frame_analysis["flaggedFrames"] = []
-                        frame_analysis["resolution"] = f"{width}x{height}"
-                        frame_analysis["frameRate"] = fps
-                        frame_analysis["colorAnomalyScore"] = 0.5
-                        frame_analysis["faceTrackingData"] = []
-            except Exception as e:
-                print(f"[background] Model analysis error: {e}")
-                # Still populate frame analysis with video metadata
-                    import cv2
-                    cap = cv2.VideoCapture(local_video_path)
-                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                    fps = int(cap.get(cv2.CAP_PROP_FPS))
-                    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    cap.release()
-                    # Update frame_analysis safely for exception case
-                    frame_analysis["frameCount"] = frame_count
-                    frame_analysis["flaggedFrames"] = []
-                    frame_analysis["resolution"] = f"{width}x{height}"
-                    frame_analysis["frameRate"] = fps
-                    frame_analysis["colorAnomalyScore"] = 0.5
-                    frame_analysis["faceTrackingData"] = []
-            else:
-                print(f"[background] Model not available or no video path, using fallback")
-                # Still populate frame analysis with video metadata if video path exists
-                if local_video_path:
-                    import cv2
-                    cap = cv2.VideoCapture(local_video_path)
-                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                    fps = int(cap.get(cv2.CAP_PROP_FPS))
-                    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    cap.release()
-                    # Update frame_analysis safely for no video path case
-                    frame_analysis["frameCount"] = frame_count
-                    frame_analysis["flaggedFrames"] = []
-                    frame_analysis["resolution"] = f"{width}x{height}"
-                    frame_analysis["frameRate"] = fps
-                    frame_analysis["colorAnomalyScore"] = 0.5
-                    frame_analysis["faceTrackingData"] = []
-                else:
-                    # Keep frame_analysis as initialized defaults
-                    overall_score, verdict, forensic = 50, "Uncertain", {}
-            
+                        frame_analysis = {
+                            "frameCount": len(scores),
+                            "flaggedFrames": flagged_frames,
+                            "resolution": metadata.get("resolution", ""),
+                            "frameRate": metadata.get("frameRate", 0),
+                            "colorAnomalyScore": float(std),
+                            "faceTrackingData": []
+                        }
+
+                    else:
+                        print("[background] No frame results, fallback")
+                        overall_score = 50
+                        verdict = "Uncertain"
+
+                except Exception as e:
+                    print("[background] ERROR:", e)
+                    overall_score = 50
+                    verdict = "Uncertain"
+
             # Update analysis record
             # Convert extractedFrames integer keys to strings for MongoDB compatibility
             extracted_frames_str_keys = {str(k): v for k, v in extracted_frames.items()}
@@ -986,10 +794,6 @@ async def submit_video_analysis(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
-    finally:
-        # Clean up temporary file
-        if temp_file_path and os.path.exists(temp_file_path):
-            os.unlink(temp_file_path)
 
 
 @app.get("/analysis/shared/{token}", response_model=AnalysisRecord | None)
