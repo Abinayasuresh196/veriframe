@@ -330,6 +330,16 @@ async def process_video_analysis(
             model = get_deepfake_model()
             print(f"[background] Model available: {model.is_available()}, Video path exists: {local_video_path is not None}")
             
+            # Initialize frame_analysis with default values to prevent scoping errors
+            frame_analysis = {
+                "frameCount": 0,
+                "flaggedFrames": [],
+                "resolution": "",
+                "frameRate": 0,
+                "colorAnomalyScore": 0,
+                "faceTrackingData": []
+            }
+            
             # Always analyze frames and upload to Cloudinary (regardless of model availability)
             if local_video_path:
                 try:
@@ -549,14 +559,13 @@ async def process_video_analysis(
                                     "verdict": frame_verdict  # Individual frame verdict
                                 })
                         
-                        frame_analysis = {
-                            "frameCount": frame_count,
-                            "flaggedFrames": flagged_frames,
-                            "resolution": f"{width}x{height}",
-                            "frameRate": fps,
-                            "colorAnomalyScore": overall_score / 100,
-                            "faceTrackingData": [{"frame": r["frame_index"], "confidence": 1.0 - float(normalized_scores[i])} for i, r in enumerate(frame_results)]
-                        }
+                        # Update frame_analysis safely instead of overwriting
+                        frame_analysis["frameCount"] = frame_count
+                        frame_analysis["flaggedFrames"] = flagged_frames
+                        frame_analysis["resolution"] = f"{width}x{height}"
+                        frame_analysis["frameRate"] = fps
+                        frame_analysis["colorAnomalyScore"] = overall_score / 100
+                        frame_analysis["faceTrackingData"] = [{"frame": r["frame_index"], "confidence": 1.0 - float(normalized_scores[i])} for i, r in enumerate(frame_results)]
                         print(f"[background] Frame analysis data: frame_count={frame_count}, fps={fps}, resolution={width}x{height}")
                     else:
                         print(f"[background] No frame results from model, using fallback")
@@ -568,14 +577,14 @@ async def process_video_analysis(
                         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         cap.release()
-                        overall_score, verdict, forensic, frame_analysis = 50, "Uncertain", {}, {
-                            "frameCount": frame_count,
-                            "flaggedFrames": [],
-                            "resolution": f"{width}x{height}",
-                            "frameRate": fps,
-                            "colorAnomalyScore": 0.5,
-                            "faceTrackingData": []
-                        }
+                        overall_score, verdict, forensic = 50, "Uncertain", {}
+                        # Update frame_analysis safely for fallback case
+                        frame_analysis["frameCount"] = frame_count
+                        frame_analysis["flaggedFrames"] = []
+                        frame_analysis["resolution"] = f"{width}x{height}"
+                        frame_analysis["frameRate"] = fps
+                        frame_analysis["colorAnomalyScore"] = 0.5
+                        frame_analysis["faceTrackingData"] = []
                 except Exception as e:
                     print(f"[background] Model analysis error: {e}")
                     # Still populate frame analysis with video metadata
@@ -586,14 +595,14 @@ async def process_video_analysis(
                     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                     cap.release()
-                    overall_score, verdict, forensic, frame_analysis = 50, "Uncertain", {}, {
-                        "frameCount": frame_count,
-                        "flaggedFrames": [],
-                        "resolution": f"{width}x{height}",
-                        "frameRate": fps,
-                        "colorAnomalyScore": 0.5,
-                        "faceTrackingData": []
-                    }
+                    overall_score, verdict, forensic = 50, "Uncertain", {}
+                    # Update frame_analysis safely for exception case
+                    frame_analysis["frameCount"] = frame_count
+                    frame_analysis["flaggedFrames"] = []
+                    frame_analysis["resolution"] = f"{width}x{height}"
+                    frame_analysis["frameRate"] = fps
+                    frame_analysis["colorAnomalyScore"] = 0.5
+                    frame_analysis["faceTrackingData"] = []
             else:
                 print(f"[background] Model not available or no video path, using fallback")
                 # Still populate frame analysis with video metadata if video path exists
@@ -605,16 +614,15 @@ async def process_video_analysis(
                     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                     cap.release()
-                    frame_analysis = {
-                        "frameCount": frame_count,
-                        "flaggedFrames": [],
-                        "resolution": f"{width}x{height}",
-                        "frameRate": fps,
-                        "colorAnomalyScore": 0.5,
-                        "faceTrackingData": []
-                    }
+                    # Update frame_analysis safely for no video path case
+                    frame_analysis["frameCount"] = frame_count
+                    frame_analysis["flaggedFrames"] = []
+                    frame_analysis["resolution"] = f"{width}x{height}"
+                    frame_analysis["frameRate"] = fps
+                    frame_analysis["colorAnomalyScore"] = 0.5
+                    frame_analysis["faceTrackingData"] = []
                 else:
-                    frame_analysis = {}
+                    # Keep frame_analysis as initialized defaults
                 overall_score, verdict, forensic = 50, "Uncertain", {}
             
             # Update analysis record
