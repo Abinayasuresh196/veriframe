@@ -406,9 +406,8 @@ async def process_video_analysis(
                                     verdict = "Real"
                                     print(f"[DEBUG] Rule 2b (HIGH-QUALITY): avg > 0.50 AND high_ratio ≤ 0.30 → {verdict}")
                         elif avg > 0.32:
-                            # This range (0.32-0.50) should be Fake for consistency with high individual scores
-                            verdict = "Fake"
-                            print(f"[DEBUG] Rule 3: avg > 0.32 → {verdict} (FIXED: was Real, now Fake)")
+                            verdict = "Real"
+                            print(f"[DEBUG] Rule 3: avg > 0.32 → {verdict}")
                         else:
                             # Middle zone - If it's a mobile file, it needs more proof to be Fake
                             if high_ratio >= 0.12:

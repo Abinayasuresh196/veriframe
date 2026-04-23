@@ -243,14 +243,21 @@ class DeepfakeModel:
             # 5. Noise and compression artifacts
             noise_score = self._analyze_noise_patterns(gray)
             
-            # Combine all scores with weights
-            fake_probability = (
+            # Combine all scores with weights - be more conservative for real content
+            base_probability = (
                 face_score * 0.3 +      # Face characteristics (most important)
                 texture_score * 0.25 +   # Texture patterns
                 color_score * 0.2 +      # Color consistency
                 edge_score * 0.15 +      # Edge characteristics
                 noise_score * 0.1        # Noise patterns
             )
+            
+            # Apply conservative scaling - real videos should get lower scores
+            fake_probability = base_probability * 0.6  # Scale down to be less aggressive
+            
+            # Add bias towards real for typical mobile videos
+            if frame.shape[1] < 1080 or frame.shape[0] < 1080:  # Low resolution
+                fake_probability *= 0.8  # Even more conservative for mobile
             
             return max(0.0, min(1.0, fake_probability))
             
