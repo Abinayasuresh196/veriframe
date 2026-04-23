@@ -521,7 +521,14 @@ async def process_video_analysis(
 
                         # If no frames flagged, flag some frames to show analysis (consistent with verdict)
                         if len(flagged_frames) == 0:
-                            frames_to_flag = frame_results[:3] if verdict == "Fake" else frame_results[:2]
+                            if verdict == "Fake":
+                                frames_to_flag = frame_results[:3]
+                            elif verdict == "Real":
+                                frames_to_flag = frame_results[:2]
+                            else:  # Uncertain - show frames with most extreme scores
+                                # Sort by distance from 0.5 (most uncertain)
+                                frames_sorted = sorted(frame_results, key=lambda x: abs(x["suspicion_score"] - 0.5), reverse=True)
+                                frames_to_flag = frames_sorted[:3]
                             for i, r in enumerate(frames_to_flag):
                                 frame_idx = r["frame_index"]
                                 frame_url = extracted_frames.get(frame_idx) or f"https://picsum.photos/seed/veriframe_{analysis_id}_{frame_idx}/320/180"

@@ -290,6 +290,10 @@ class MongoDBAnalysis:
                     should_flag = True
                 elif verdict == "Real" and frame_result["suspicion_score"] > 0.7:  # Higher threshold for real
                     should_flag = True
+                elif verdict == "Uncertain":  # Show representative frames for uncertain verdicts
+                    # Flag frames with extreme scores (very low or very high) to show uncertainty
+                    if frame_result["suspicion_score"] < 0.2 or frame_result["suspicion_score"] > 0.8:
+                        should_flag = True
                 
                 if should_flag:
                     frame_url = None
@@ -318,7 +322,14 @@ class MongoDBAnalysis:
             
             # If no frames flagged, flag some frames to show analysis (consistent with verdict)
             if len(flagged_frames) == 0:
-                frames_to_flag = frame_results[:3] if verdict == "Fake" else frame_results[:2]
+                if verdict == "Fake":
+                    frames_to_flag = frame_results[:3]
+                elif verdict == "Real":
+                    frames_to_flag = frame_results[:2]
+                else:  # Uncertain - show frames with most extreme scores
+                    # Sort by distance from 0.5 (most uncertain)
+                    frames_sorted = sorted(frame_results, key=lambda x: abs(x["suspicion_score"] - 0.5), reverse=True)
+                    frames_to_flag = frames_sorted[:3]
                 for frame_result in frames_to_flag:
                     frame_url = None
                     if extracted_frames and frame_result["frame_index"] in extracted_frames:
