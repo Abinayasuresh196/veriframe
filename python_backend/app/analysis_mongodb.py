@@ -184,7 +184,8 @@ class MongoDBAnalysis:
 
             # 🔥 MOBILE-SMART PRODUCTION LOGIC
             # Detect if video is low quality (typical for mobile/WhatsApp)
-            compression_artifacts = frame_analysis.get("compressionArtifactScore", 0.0)
+            # Use default compression artifacts since frame_analysis is not yet created
+            compression_artifacts = 0.2  # Default value
             resolution_str = metadata.get("resolution", "1920x1080")
             
             # Parse resolution to get width
