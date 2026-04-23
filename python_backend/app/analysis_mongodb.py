@@ -172,27 +172,52 @@ class MongoDBAnalysis:
             high_ratio = float(np.sum(scores > 0.6)) / len(scores)
             total_frames = len(scores)
 
-            # 🔥 FINAL BALANCED PRODUCTION LOGIC (Stable)
+            # 🔥 MOBILE-SMART PRODUCTION LOGIC
+            # Detect if video is low quality (typical for mobile/WhatsApp)
+            compression_artifacts = frame_analysis.get("compressionArtifactScore", 0.0)
+            resolution_str = metadata.get("resolution", "1920x1080")
+            
+            # Parse resolution to get width
+            try:
+                resolution_width = int(resolution_str.split('x')[0])
+            except:
+                resolution_width = 1920  # default
+            
+            is_low_quality = (resolution_width < 1080) or (compression_artifacts > 0.15)
+            
             print(f"[DEBUG] avg={avg:.3f}, high_ratio={high_ratio:.3f}")
+            print(f"[DEBUG] resolution_width={resolution_width}, compression_artifacts={compression_artifacts:.3f}")
+            print(f"[DEBUG] is_low_quality={is_low_quality}")
             
             if avg < 0.20:
                 verdict = "Fake"
                 print(f"[DEBUG] Rule 1: avg < 0.20 → {verdict}")
             elif avg > 0.50:
-                if high_ratio > 0.30:
-                    verdict = "Fake"   # animation / over-smooth
-                    print(f"[DEBUG] Rule 2a: avg > 0.50 AND high_ratio > 0.30 → {verdict}")
+                # MOBILE ADJUSTMENT: Real mobile videos have high 'jitter' (temporal inconsistency)
+                # We only call it Fake if the high_ratio is extremely dominant
+                if is_low_quality:
+                    if high_ratio > 0.45:  # Raised threshold for mobile noise
+                        verdict = "Fake"
+                        print(f"[DEBUG] Rule 2a (MOBILE): avg > 0.50 AND high_ratio > 0.45 → {verdict}")
+                    else:
+                        verdict = "Real"
+                        print(f"[DEBUG] Rule 2b (MOBILE): avg > 0.50 AND high_ratio ≤ 0.45 → {verdict}")
                 else:
-                    verdict = "Real"
-                    print(f"[DEBUG] Rule 2b: avg > 0.50 AND high_ratio ≤ 0.30 → {verdict}")
+                    if high_ratio > 0.30:
+                        verdict = "Fake"   # animation / over-smooth
+                        print(f"[DEBUG] Rule 2a (HIGH-QUALITY): avg > 0.50 AND high_ratio > 0.30 → {verdict}")
+                    else:
+                        verdict = "Real"
+                        print(f"[DEBUG] Rule 2b (HIGH-QUALITY): avg > 0.50 AND high_ratio ≤ 0.30 → {verdict}")
             elif avg > 0.32:
                 verdict = "Real"
                 print(f"[DEBUG] Rule 3: avg > 0.32 → {verdict}")
             else:
-                # middle zone
+                # Middle zone - If it's a mobile file, it needs more proof to be Fake
                 if high_ratio >= 0.12:
-                    verdict = "Fake"
-                    print(f"[DEBUG] Rule 4a: middle zone AND high_ratio ≥ 0.12 → {verdict}")
+                    threshold = 0.25 if is_low_quality else 0.12
+                    verdict = "Fake" if high_ratio >= threshold else "Real"
+                    print(f"[DEBUG] Rule 4a: middle zone AND high_ratio ≥ {threshold:.2f} ({'MOBILE' if is_low_quality else 'HIGH-QUALITY'}) → {verdict}")
                 else:
                     verdict = "Real"
                     print(f"[DEBUG] Rule 4b: middle zone AND high_ratio < 0.12 → {verdict}")
