@@ -362,7 +362,7 @@ async def process_video_analysis(
                             extracted_frames[frame_idx] = frame_url
                         print(f"[background] ✅ Extracted {len(frames)} frames to Cloudinary")
 
-                        # Final distribution-based verdict logic
+                        # Robust verdict logic with outlier handling
                         import numpy as np
 
                         frame_scores = [r["suspicion_score"] for r in frame_results]
@@ -371,12 +371,24 @@ async def process_video_analysis(
                         # STEP 1: Normalize (remove bias)
                         scores = (scores - np.min(scores)) / (np.max(scores) - np.min(scores) + 1e-6)
 
-                        avg = float(np.mean(scores))
-                        std = float(np.std(scores))
+                        # STEP 2: Remove outliers (trim top/bottom 10%)
+                        sorted_scores = np.sort(scores)
+                        n = len(sorted_scores)
+                        trim_start = int(0.1 * n)
+                        trim_end = int(0.9 * n)
+                        trimmed_scores = sorted_scores[trim_start:trim_end]
+                        
+                        # STEP 3: Calculate robust average from trimmed scores
+                        avg = float(np.mean(trimmed_scores))
+                        std = float(np.std(trimmed_scores))
 
-                        # STEP 2: percent of high suspicious frames
-                        high_ratio = float(np.sum(scores > 0.6)) / len(scores)
+                        # STEP 4: Consensus logic - percent of high suspicious frames
+                        fake_votes = int(np.sum(scores > 0.6))
+                        fake_ratio = fake_votes / len(scores)
                         total_frames = len(scores)
+                        
+                        print(f"[ROBUST ANALYSIS] Original avg: {float(np.mean(scores)):.3f}, Trimmed avg: {avg:.3f}")
+                        print(f"[ROBUST ANALYSIS] Fake votes: {fake_votes}/{len(scores)} ({fake_ratio:.2f})")
 
                         # 🔥 MOBILE-SMART PRODUCTION LOGIC
                         # Detect if video is low quality (typical for mobile/WhatsApp)
@@ -391,61 +403,42 @@ async def process_video_analysis(
                         
                         is_low_quality = (resolution_width < 1080) or (compression_artifacts > 0.15)
                         
-                        print(f"[DEBUG] avg={avg:.3f}, high_ratio={high_ratio:.3f}")
+                        print(f"[DEBUG] avg={avg:.3f}, fake_ratio={fake_ratio:.3f}")
                         print(f"[DEBUG] resolution_width={resolution_width}, compression_artifacts={compression_artifacts:.3f}")
                         print(f"[DEBUG] is_low_quality={is_low_quality}")
                         
-                        if avg < 0.20:
-                            verdict = "Fake"
-                            print(f"[DEBUG] Rule 1: avg < 0.20 → {verdict}")
-                        elif avg > 0.50:
-                            # MOBILE ADJUSTMENT: Real mobile videos have high 'jitter' (temporal inconsistency)
-                            # We only call it Fake if the high_ratio is extremely dominant
-                            if is_low_quality:
-                                if high_ratio > 0.45:  # Raised threshold for mobile noise
-                                    verdict = "Fake"
-                                    print(f"[DEBUG] Rule 2a (MOBILE): avg > 0.50 AND high_ratio > 0.45 → {verdict}")
-                                else:
-                                    verdict = "Real"
-                                    print(f"[DEBUG] Rule 2b (MOBILE): avg > 0.50 AND high_ratio ≤ 0.45 → {verdict}")
-                            else:
-                                if high_ratio > 0.30:
-                                    verdict = "Fake"   # animation / over-smooth
-                                    print(f"[DEBUG] Rule 2a (HIGH-QUALITY): avg > 0.50 AND high_ratio > 0.30 → {verdict}")
-                                else:
-                                    verdict = "Real"
-                                    print(f"[DEBUG] Rule 2b (HIGH-QUALITY): avg > 0.50 AND high_ratio ≤ 0.30 → {verdict}")
-                        elif avg > 0.32:
+                        # STABLE VERDICT LOGIC (robust to outliers)
+                        if avg < 0.25:
                             verdict = "Real"
-                            print(f"[DEBUG] Rule 3: avg > 0.32 → {verdict}")
+                            print(f"[ROBUST] Rule 1: trimmed avg < 0.25 → {verdict}")
+                        elif avg > 0.6:
+                            verdict = "Fake"
+                            print(f"[ROBUST] Rule 2: trimmed avg > 0.6 → {verdict}")
                         else:
-                            # Middle zone - If it's a mobile file, it needs more proof to be Fake
-                            if high_ratio >= 0.12:
-                                threshold = 0.25 if is_low_quality else 0.12
-                                verdict = "Fake" if high_ratio >= threshold else "Real"
-                                print(f"[DEBUG] Rule 4a: middle zone AND high_ratio ≥ {threshold:.2f} ({'MOBILE' if is_low_quality else 'HIGH-QUALITY'}) → {verdict}")
+                            # Middle zone - use consensus (fake_ratio)
+                            if fake_ratio > 0.4:
+                                verdict = "Fake"
+                                print(f"[ROBUST] Rule 3: middle zone AND fake_ratio > 0.4 → {verdict}")
                             else:
                                 verdict = "Real"
-                                print(f"[DEBUG] Rule 4b: middle zone AND high_ratio < 0.12 → {verdict}")
+                                print(f"[ROBUST] Rule 4: middle zone AND fake_ratio ≤ 0.4 → {verdict}")
+                        
+                        print(f"[ROBUST FINAL] Verdict: {verdict}, Trimmed avg: {avg:.3f}, Fake ratio: {fake_ratio:.2f}")
 
-                        # Fix confidence to be properly aligned with original verdict logic
+                        # Fix confidence to be properly aligned with robust verdict logic
                         if verdict == "Fake":
                             # For Fake verdict, confidence should be high when avg is clearly in Fake zones
-                            if avg < 0.23:
-                                confidence = int((0.23 - avg) / 0.23 * 50 + 50)  # 50-100% confidence
-                            elif avg > 0.50 and high_ratio > 0.35:
-                                confidence = int((avg - 0.50) / 0.50 * 50 + 50)  # 50-100% confidence
+                            if avg > 0.7:
+                                confidence = int((avg - 0.6) / 0.4 * 50 + 50)  # 50-100% confidence
                             else:  # middle zone Fake
-                                confidence = int((high_ratio - 0.10) / 0.40 * 50 + 50)  # 50-100% confidence
+                                confidence = int((fake_ratio - 0.4) / 0.6 * 50 + 50)  # 50-100% confidence
                             avg_score = avg
                         else:
                             # For Real verdict, confidence should be high when avg is clearly in Real zones
-                            if avg > 0.50 and high_ratio <= 0.35:
-                                confidence = int((avg - 0.50) / 0.50 * 50 + 50)  # 50-100% confidence
-                            elif avg > 0.34:
-                                confidence = int((avg - 0.34) / 0.66 * 50 + 50)  # 50-100% confidence
+                            if avg < 0.15:
+                                confidence = int((0.25 - avg) / 0.25 * 50 + 50)  # 50-100% confidence
                             else:  # middle zone Real
-                                confidence = int((0.10 - high_ratio) / 0.10 * 50 + 50)  # 50-100% confidence
+                                confidence = int((0.4 - fake_ratio) / 0.4 * 50 + 50)  # 50-100% confidence
                             avg_score = avg
 
                         overall_score = int(avg_score * 100)
@@ -455,7 +448,7 @@ async def process_video_analysis(
                         print("Normalized:", scores[:10])
                         print("AVG:", avg)
                         print("STD:", std)
-                        print("High ratio:", high_ratio)
+                        print("Fake ratio:", fake_ratio)
                         print("Verdict:", verdict)
                         print("Confidence:", confidence)
                         print("-------------------------")
@@ -463,7 +456,7 @@ async def process_video_analysis(
                         print(f"[background] Verdict: {verdict} (avg={avg:.3f}, confidence={confidence}%)")
 
                         # Populate forensic data based on VERDICT for consistency
-                        fake_votes = int(high_ratio * total_frames)
+                        fake_votes = int(fake_ratio * total_frames)
                         
                         # Forensic metrics consistent with verdict
                         if verdict == "Fake":
