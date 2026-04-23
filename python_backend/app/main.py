@@ -370,7 +370,7 @@ async def process_video_analysis(
 
                         # 🔥 MOBILE-SMART PRODUCTION LOGIC
                         # Detect if video is low quality (typical for mobile/WhatsApp)
-                        compression_artifacts = frame_analysis.get("compressionArtifactScore", 0.0)
+                        compression_artifacts = 0.2  # Default value since frame_analysis is not yet created
                         resolution_str = metadata.get("resolution", "1920x1080")
                         
                         # Parse resolution to get width
