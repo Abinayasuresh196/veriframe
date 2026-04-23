@@ -42,6 +42,10 @@ def health():
 async def test_endpoint():
     return {"status": "ok", "message": "Backend is reachable"}
 
+@app.post("/analysis/submit/test")
+async def test_submit_endpoint():
+    return {"status": "ok", "message": "Submit endpoint path is working"}
+
 @app.get("/debug/tensorflow")
 async def debug_tensorflow():
     """Simple TensorFlow test endpoint."""
@@ -751,6 +755,9 @@ async def submit_video_analysis(
     resolution: str = Form(None),
     x_user_id: Annotated[str | None, Header()] = None,
 ) -> str:
+    print("[DEBUG] Submit endpoint called!")
+    print(f"[DEBUG] Filename: {filename}")
+    print(f"[DEBUG] File size: {fileSize}")
     # Removed verbose logging
     
     # Try MongoDB first, fallback to local storage
