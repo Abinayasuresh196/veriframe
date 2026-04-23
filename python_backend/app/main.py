@@ -343,8 +343,11 @@ async def process_video_analysis(
             # Always analyze frames and upload to Cloudinary (regardless of model availability)
             if local_video_path:
                 try:
-                    frame_results = model.analyze_video_frames(local_video_path, max_frames=30)
+                    frame_results = model.analyze_video_frames(local_video_path, max_frames=15)
                     print(f"[background] Model analysis returned {len(frame_results) if frame_results else 0} frame results")
+                except Exception as e:
+                    print(f"[background] Model analysis failed: {e}")
+                    frame_results = None
                     
                     # Always upload frames to Cloudinary if analysis succeeded
                     if frame_results:
