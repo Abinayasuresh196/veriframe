@@ -623,7 +623,7 @@ async def process_video_analysis(
                     frame_analysis["faceTrackingData"] = []
                 else:
                     # Keep frame_analysis as initialized defaults
-                overall_score, verdict, forensic = 50, "Uncertain", {}
+                    overall_score, verdict, forensic = 50, "Uncertain", {}
             
             # Update analysis record
             # Convert extractedFrames integer keys to strings for MongoDB compatibility
