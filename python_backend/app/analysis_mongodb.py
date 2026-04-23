@@ -134,8 +134,11 @@ class MongoDBAnalysis:
             frame_results = model.analyze_video_frames(video_path, max_frames=30)
             
             print(f"[Analysis] Frame analysis complete. Results: {frame_results}")
+            print(f"[Analysis] Frame results type: {type(frame_results)}")
+            print(f"[Analysis] Frame results length: {len(frame_results) if frame_results else 'None'}")
             
             if not frame_results or len(frame_results) == 0:
+                print(f"[Analysis] Frame analysis returned empty results, creating enhanced simulation results")
                 print(f"[Analysis] Frame analysis returned empty results, creating enhanced simulation results")
                 # Create enhanced simulation results instead of falling back
                 import numpy as np
@@ -160,17 +163,15 @@ class MongoDBAnalysis:
             import numpy as np
 
             frame_scores = [r["suspicion_score"] for r in frame_results]
-            scores = np.array(frame_scores)
+            print(f"[Analysis] Scores: min={np.min(frame_scores):.3f}, max={np.max(frame_scores):.3f}, avg={np.mean(frame_scores):.3f}")
+            print(f"[Analysis] High ratio: {np.sum(np.array(frame_scores) > 0.6) / len(frame_scores):.3f}, Total frames: {len(frame_scores)}")
 
-            # STEP 1: Normalize (remove bias)
-            scores = (scores - np.min(scores)) / (np.max(scores) - np.min(scores) + 1e-6)
-
-            avg = float(np.mean(scores))
-            std = float(np.std(scores))
+            avg = float(np.mean(frame_scores))
+            std = float(np.std(frame_scores))
 
             # STEP 2: percent of high suspicious frames
-            high_ratio = float(np.sum(scores > 0.6)) / len(scores)
-            total_frames = len(scores)
+            high_ratio = float(np.sum(np.array(frame_scores) > 0.6)) / len(frame_scores)
+            total_frames = len(frame_scores)
 
             # 🔥 MOBILE-SMART PRODUCTION LOGIC
             # Detect if video is low quality (typical for mobile/WhatsApp)
@@ -283,17 +284,28 @@ class MongoDBAnalysis:
             flagged_frames = []
             
             # Use actual frame results from model - CONSISTENT WITH OVERALL VERDICT
-            for frame_result in frame_results:
+            print(f"[Analysis] Starting frame flagging for {len(frame_results)} frames with verdict: {verdict}")
+            
+            for i, frame_result in enumerate(frame_results):
                 # Flag frames based on verdict consistency
                 should_flag = False
-                if verdict == "Fake" and frame_result["suspicion_score"] > 0.3:  # Lower threshold for fake
+                frame_score = frame_result["suspicion_score"]
+                
+                if verdict == "Fake" and frame_score > 0.3:  # Lower threshold for fake
                     should_flag = True
-                elif verdict == "Real" and frame_result["suspicion_score"] > 0.7:  # Higher threshold for real
+                    print(f"[Analysis] Frame {i}: Fake verdict, score {frame_score:.3f} > 0.3 → FLAGGED")
+                elif verdict == "Real" and frame_score > 0.7:  # Higher threshold for real
                     should_flag = True
+                    print(f"[Analysis] Frame {i}: Real verdict, score {frame_score:.3f} > 0.7 → FLAGGED")
                 elif verdict == "Uncertain":  # Show representative frames for uncertain verdicts
                     # Flag frames with extreme scores (very low or very high) to show uncertainty
-                    if frame_result["suspicion_score"] < 0.2 or frame_result["suspicion_score"] > 0.8:
+                    if frame_score < 0.2 or frame_score > 0.8:
                         should_flag = True
+                        print(f"[Analysis] Frame {i}: Uncertain verdict, score {frame_score:.3f} extreme → FLAGGED")
+                    else:
+                        print(f"[Analysis] Frame {i}: Uncertain verdict, score {frame_score:.3f} not extreme → not flagged")
+                else:
+                    print(f"[Analysis] Frame {i}: Verdict {verdict}, score {frame_score:.3f} → not flagged")
                 
                 if should_flag:
                     frame_url = None
@@ -321,15 +333,23 @@ class MongoDBAnalysis:
                     })
             
             # If no frames flagged, flag some frames to show analysis (consistent with verdict)
+            print(f"[Analysis] Frame flagging complete. Flagged {len(flagged_frames)} frames")
+            
             if len(flagged_frames) == 0:
+                print(f"[Analysis] No frames flagged, using fallback logic for verdict: {verdict}")
                 if verdict == "Fake":
                     frames_to_flag = frame_results[:3]
+                    print(f"[Analysis] Fake verdict fallback: selecting first 3 frames")
                 elif verdict == "Real":
                     frames_to_flag = frame_results[:2]
+                    print(f"[Analysis] Real verdict fallback: selecting first 2 frames")
                 else:  # Uncertain - show frames with most extreme scores
                     # Sort by distance from 0.5 (most uncertain)
                     frames_sorted = sorted(frame_results, key=lambda x: abs(x["suspicion_score"] - 0.5), reverse=True)
                     frames_to_flag = frames_sorted[:3]
+                    print(f"[Analysis] Uncertain verdict fallback: selecting 3 most extreme frames")
+                    for i, frame in enumerate(frames_to_flag):
+                        print(f"[Analysis]   Fallback frame {i}: score {frame['suspicion_score']:.3f}")
                 for frame_result in frames_to_flag:
                     frame_url = None
                     if extracted_frames and frame_result["frame_index"] in extracted_frames:
