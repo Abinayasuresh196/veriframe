@@ -389,6 +389,7 @@ async def process_video_analysis(
                         
                         print(f"[ROBUST ANALYSIS] Original avg: {float(np.mean(scores)):.3f}, Trimmed avg: {avg:.3f}")
                         print(f"[ROBUST ANALYSIS] Fake votes: {fake_votes}/{len(scores)} ({fake_ratio:.2f})")
+                        print(f"[ROBUST ANALYSIS] Std deviation: {std:.3f} (flat pattern detection)")
 
                         # 🔥 MOBILE-SMART PRODUCTION LOGIC
                         # Detect if video is low quality (typical for mobile/WhatsApp)
@@ -407,29 +408,34 @@ async def process_video_analysis(
                         print(f"[DEBUG] resolution_width={resolution_width}, compression_artifacts={compression_artifacts:.3f}")
                         print(f"[DEBUG] is_low_quality={is_low_quality}")
                         
-                        # STABLE VERDICT LOGIC (robust to outliers)
+                        # FINAL HYBRID LOGIC (robust to outliers + animation detection)
                         if avg < 0.25:
                             verdict = "Real"
-                            print(f"[ROBUST] Rule 1: trimmed avg < 0.25 → {verdict}")
+                            print(f"[HYBRID] Rule 1: trimmed avg < 0.25 → {verdict}")
                         elif avg > 0.6:
                             verdict = "Fake"
-                            print(f"[ROBUST] Rule 2: trimmed avg > 0.6 → {verdict}")
+                            print(f"[HYBRID] Rule 2: trimmed avg > 0.6 → {verdict}")
                         else:
-                            # Middle zone - use consensus (fake_ratio)
-                            if fake_ratio > 0.4:
+                            # Middle zone - NEW: detect animation / non-human patterns
+                            if std < 0.12:
                                 verdict = "Fake"
-                                print(f"[ROBUST] Rule 3: middle zone AND fake_ratio > 0.4 → {verdict}")
+                                print(f"[HYBRID] Rule 3: middle zone AND std < 0.12 → {verdict} (flat pattern = animation)")
+                            elif fake_ratio > 0.4:
+                                verdict = "Fake"
+                                print(f"[HYBRID] Rule 4: middle zone AND fake_ratio > 0.4 → {verdict}")
                             else:
                                 verdict = "Real"
-                                print(f"[ROBUST] Rule 4: middle zone AND fake_ratio ≤ 0.4 → {verdict}")
+                                print(f"[HYBRID] Rule 5: middle zone → {verdict}")
                         
-                        print(f"[ROBUST FINAL] Verdict: {verdict}, Trimmed avg: {avg:.3f}, Fake ratio: {fake_ratio:.2f}")
+                        print(f"[HYBRID FINAL] Verdict: {verdict}, Trimmed avg: {avg:.3f}, Fake ratio: {fake_ratio:.2f}, Std: {std:.3f}")
 
-                        # Fix confidence to be properly aligned with robust verdict logic
+                        # Fix confidence to be properly aligned with hybrid verdict logic
                         if verdict == "Fake":
                             # For Fake verdict, confidence should be high when avg is clearly in Fake zones
                             if avg > 0.7:
                                 confidence = int((avg - 0.6) / 0.4 * 50 + 50)  # 50-100% confidence
+                            elif std < 0.12:  # Animation detection
+                                confidence = int((0.12 - std) / 0.12 * 50 + 50)  # 50-100% confidence
                             else:  # middle zone Fake
                                 confidence = int((fake_ratio - 0.4) / 0.6 * 50 + 50)  # 50-100% confidence
                             avg_score = avg
