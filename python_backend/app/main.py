@@ -353,64 +353,53 @@ async def process_video_analysis(
 
                     print(f"[background] ✅ Extracted {len(frames)} frames")
 
-                    # ---- SAFE ANALYSIS ----
+                    # ---- SAFE ANALYSIS (PRODUCTION STABLE V4.1) ----
                     import numpy as np
-
                     scores = np.array([r["suspicion_score"] for r in frame_results])
-                    
-                    # 🔥 PRO LEVEL TUNING: Reduce impact of random 100% spikes for smoother decisions
-                    scores = np.clip(scores, 0, 0.95)
 
-                    min_s = float(np.min(scores))
-                    max_s = float(np.max(scores))
-
-                    if max_s - min_s < 1e-6:
-                        scores = np.zeros_like(scores)
-                    else:
-                        scores = (scores - min_s) / (max_s - min_s)
-
-                    sorted_scores = np.sort(scores)
-                    n = len(sorted_scores)
-
-                    trimmed = sorted_scores[int(0.1*n):int(0.9*n)]
-
-                    if len(trimmed) == 0:
-                        trimmed = sorted_scores
-
-                    avg = float(np.mean(trimmed))
-                    std = float(np.std(trimmed))
-
-                    fake_votes = int(np.sum(scores > 0.6))
+                    # Safety: prevent extreme spikes ruining logic
                     peak_suspicion = float(np.max(scores))
-                    fake_ratio = fake_votes / len(scores)
+                    scores = np.where(scores > 0.98, 0.95, scores)
 
-                    # Debug diagnostic prints for ML tuning
-                    print(f"[forensic] AVG: {avg:.4f}, STD: {std:.4f}, FAKE_RATIO: {fake_ratio:.4f}, PEAK: {peak_suspicion:.4f}")
+                    avg = float(np.mean(scores))
+                    std = float(np.std(scores))
+                    fake_ratio = float(np.sum(scores > 0.6)) / len(scores)
 
-                    # FINAL LOGIC
-                    # --- FINAL SMART LOGIC V4 (FIXED) ---
-                    if avg < 0.30:
+                    print(f"[DEBUG] avg={avg:.3f}, std={std:.3f}, fake_ratio={fake_ratio:.3f}, peak={peak_suspicion:.3f}")
+
+                    # 1️⃣ VERY CLEAR REAL
+                    if avg < 0.28 and fake_ratio < 0.25:
                         verdict = "Real"
-                    elif avg > 0.75:
+
+                    # 2️⃣ VERY CLEAR FAKE
+                    elif avg > 0.72:
                         verdict = "Fake"
-                    # 🔥 Animation detection (Widened from 0.08 to 0.15 for better coverage)
-                    elif 0.45 <= avg <= 0.75 and std < 0.15:
+
+                    # 3️⃣ 🔥 ANIMATION / AI (MOST IMPORTANT FIX)
+                    elif avg > 0.45 and std < 0.15:
                         verdict = "Fake"
-                    # 🔥 Strong fake peaks (real deepfake)
-                    elif fake_ratio > 0.3 and peak_suspicion > 0.9:
+
+                    # 4️⃣ 🔥 PARTIAL DEEPFAKE (SPIKES)
+                    elif peak_suspicion > 0.92 and fake_ratio > 0.30:
                         verdict = "Fake"
-                    # 🔥 Majority fake frames
-                    elif fake_ratio > 0.5:
+
+                    # 5️⃣ 🔥 MANY FAKE FRAMES
+                    elif fake_ratio > 0.50:
                         verdict = "Fake"
-                    # ✅ WhatsApp / compressed real fix
-                    elif avg <= 0.60 and fake_ratio < 0.45:
+
+                    # 6️⃣ ✅ COMPRESSED REAL (WhatsApp FIX)
+                    elif avg < 0.55 and fake_ratio < 0.35:
                         verdict = "Real"
-                    # ✅ Stable real (low variation)
-                    # ONLY treat as Real if average suspicion is also reasonably low
-                    elif avg < 0.45 and std < 0.20:
+
+                    # 7️⃣ ✅ NATURAL STABLE VIDEO
+                    elif std < 0.18 and avg < 0.50:
+                        verdict = "Real"
+
+                    # 8️⃣ FINAL DECISION (NO MORE UNNECESSARY UNCERTAIN)
+                    elif avg < 0.65:
                         verdict = "Real"
                     else:
-                        verdict = "Uncertain"
+                        verdict = "Fake"
 
                     # 🔥 FIX 3: Dynamic Forensic Breakdown
                     forensic = {
