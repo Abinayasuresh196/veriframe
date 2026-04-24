@@ -354,8 +354,12 @@ async def process_video_analysis(
                     print(f"[background] ✅ Extracted {len(frames)} frames")
 
                     # ---- SAFE ANALYSIS ----
+                    import numpy as np
 
                     scores = np.array([r["suspicion_score"] for r in frame_results])
+                    
+                    # 🔥 PRO LEVEL TUNING: Reduce impact of random 100% spikes for smoother decisions
+                    scores = np.clip(scores, 0, 0.95)
 
                     min_s = float(np.min(scores))
                     max_s = float(np.max(scores))
@@ -384,25 +388,25 @@ async def process_video_analysis(
                     print(f"[forensic] AVG: {avg:.4f}, STD: {std:.4f}, FAKE_RATIO: {fake_ratio:.4f}, PEAK: {peak_suspicion:.4f}")
 
                     # FINAL LOGIC
-                    # --- FINAL SMART LOGIC (BEST VERSION) ---
-                    if avg < 0.25:
+                    # --- FINAL SMART LOGIC V4 (FIXED) ---
+                    if avg < 0.30:
                         verdict = "Real"
                     elif avg > 0.75:
                         verdict = "Fake"
-                    # 🔥 Animation detection (Widened from 0.08 to 0.15)
-                    elif 0.45 <= avg <= 0.75 and std < 0.15:
+                    # 🔥 Animation detection
+                    elif 0.45 <= avg <= 0.75 and std < 0.08:
                         verdict = "Fake"
-                    # 🔥 Hidden smooth fake (Low variation suspicion)
-                    elif std < 0.12 and avg > 0.4:
-                        verdict = "Fake"
-                    # 🔥 Peak anomaly detection
+                    # 🔥 Strong fake peaks (real deepfake)
                     elif fake_ratio > 0.3 and peak_suspicion > 0.9:
                         verdict = "Fake"
-                    # Strong fake consensus
+                    # 🔥 Majority fake frames
                     elif fake_ratio > 0.5:
                         verdict = "Fake"
-                    # Stable real (Handles WhatsApp compression noise patterns)
-                    elif avg < 0.4 and std < 0.2:
+                    # ✅ WhatsApp / compressed real fix
+                    elif avg <= 0.60 and fake_ratio < 0.45:
+                        verdict = "Real"
+                    # ✅ Stable real (low variation)
+                    elif std < 0.20:
                         verdict = "Real"
                     else:
                         verdict = "Uncertain"
