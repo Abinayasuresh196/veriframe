@@ -433,23 +433,28 @@ async def process_video_analysis(
                         peak_suspicion = float(np.max(scores))
                         fake_ratio = fake_votes / len(scores)
 
+                        # Debug diagnostic prints for ML tuning
+                        print(f"[forensic] AVG: {avg:.4f}, STD: {std:.4f}, FAKE_RATIO: {fake_ratio:.4f}, PEAK: {peak_suspicion:.4f}")
+
                         # FINAL LOGIC
-                        # --- FINAL SMART LOGIC ---
+                        # --- FINAL SMART LOGIC (BEST VERSION) ---
                         if avg < 0.25:
                             verdict = "Real"
                         elif avg > 0.75:
                             verdict = "Fake"
-                        # 🔥 ANIMATION DETECTION (IMPORTANT)
-                        elif 0.45 <= avg <= 0.75 and std < 0.08:
-                            verdict = "Fake"   # over-smooth animation
-                        # 🔥 PEAK ANOMALY DETECTION
-                        # (Handles videos with mixed real/fake segments where avg is low)
+                        # 🔥 Animation detection (Widened from 0.08 to 0.15)
+                        elif 0.45 <= avg <= 0.75 and std < 0.15:
+                            verdict = "Fake"
+                        # 🔥 Hidden smooth fake (Low variation suspicion)
+                        elif std < 0.12 and avg > 0.4:
+                            verdict = "Fake"
+                        # 🔥 Peak anomaly detection
                         elif fake_ratio > 0.3 and peak_suspicion > 0.9:
                             verdict = "Fake"
                         # Strong fake consensus
                         elif fake_ratio > 0.5:
                             verdict = "Fake"
-                        # Stable real (Loosened std threshold from 0.12 to 0.20 to favor compressed real videos)
+                        # Stable real (Handles WhatsApp compression noise patterns)
                         elif avg < 0.4 and std < 0.2:
                             verdict = "Real"
                         else:
