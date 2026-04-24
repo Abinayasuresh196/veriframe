@@ -228,6 +228,21 @@ async def process_video_analysis(
     use_mongodb: bool
 ):
     """Background task to process video analysis."""
+    # 🔥 Initialize variables at top to prevent UnboundLocalError
+    overall_score = 50
+    verdict = "Uncertain"
+    forensic = {}
+    confidence = 50
+    frame_analysis = {
+        "frameCount": 0,
+        "flaggedFrames": [],
+        "resolution": "",
+        "frameRate": 0,
+        "colorAnomalyScore": 0,
+        "faceTrackingData": []
+    }
+    extracted_frames = {}
+    
     try:
         print(f"[background] Starting analysis for {filename}")
 
@@ -347,11 +362,7 @@ async def process_video_analysis(
                 "faceTrackingData": []
             }
             
-            # Initialize variables to prevent UnboundLocalError
-            overall_score = 50
-            verdict = "Uncertain"
-            forensic = {}
-            confidence = 50
+            # Variable initialization removed here as they are now at the top scope
             
             # Always analyze frames and upload to Cloudinary (regardless of model availability)
             if local_video_path:
@@ -435,8 +446,8 @@ async def process_video_analysis(
                         frame_analysis = {
                             "frameCount": len(scores),
                             "flaggedFrames": flagged_frames,
-                            "resolution": metadata.get("resolution", ""),
-                            "frameRate": metadata.get("frameRate", 0),
+                            "resolution": metadata.get("resolution") or "",
+                            "frameRate": float(metadata.get("frameRate") or 0),
                             "colorAnomalyScore": float(std),
                             "faceTrackingData": []
                         }
@@ -529,12 +540,12 @@ def _doc_to_record(result: dict) -> AnalysisRecord:
     
     # Provide default values for missing forensic fields
     forensic_data = {
-        "deepfakeProbability": forensic.get("deepfakeProbability", 0.0),
-        "frameInsertionRisk": forensic.get("frameInsertionRisk", 0.0),
-        "frameDeletionRisk": forensic.get("frameDeletionRisk", 0.0),
-        "temporalInconsistencyScore": forensic.get("temporalInconsistencyScore", 0.0),
-        "compressionArtifactScore": forensic.get("compressionArtifactScore", 0.0),
-        "audioVideoSyncScore": forensic.get("audioVideoSyncScore", 0.0),
+        "deepfakeProbability": float(forensic.get("deepfakeProbability") or 0.0),
+        "frameInsertionRisk": float(forensic.get("frameInsertionRisk") or 0.0),
+        "frameDeletionRisk": float(forensic.get("frameDeletionRisk") or 0.0),
+        "temporalInconsistencyScore": float(forensic.get("temporalInconsistencyScore") or 0.0),
+        "compressionArtifactScore": float(forensic.get("compressionArtifactScore") or 0.0),
+        "audioVideoSyncScore": float(forensic.get("audioVideoSyncScore") or 0.0),
     }
     
     # Provide default values for missing frame analysis fields
@@ -557,13 +568,24 @@ def _doc_to_record(result: dict) -> AnalysisRecord:
             continue
     
     frame_analysis_data = {
-        "frameCount": frame_analysis.get("frameCount", 0),
+        "frameCount": int(frame_analysis.get("frameCount") or 0),
         "flaggedFrames": flagged_frames,
-        "resolution": frame_analysis.get("resolution", ""),
-        "frameRate": frame_analysis.get("frameRate", 0),
-        "colorAnomalyScore": frame_analysis.get("colorAnomalyScore", 0.0),
-        "faceTrackingData": frame_analysis.get("faceTrackingData", []),
+        "resolution": frame_analysis.get("resolution") or "",
+        "frameRate": float(frame_analysis.get("frameRate") or 0),
+        "colorAnomalyScore": float(frame_analysis.get("colorAnomalyScore") or 0),
+        "faceTrackingData": frame_analysis.get("faceTrackingData") or [],
     }
+
+    # Handle status mapping safely
+    status_raw = str(result.get("status") or "Complete").lower()
+    if status_raw in ["complete", "success", "finished"]:
+        status = AnalysisStatus.Complete
+    elif status_raw in ["failed", "error"]:
+        status = AnalysisStatus.Failed
+    elif status_raw in ["processing", "analyzing", "pending"]:
+        status = AnalysisStatus.Processing
+    else:
+        status = AnalysisStatus.Queued
     
     # Handle invalid verdict values
     verdict = result.get("verdict") or "Unknown"
@@ -580,7 +602,7 @@ def _doc_to_record(result: dict) -> AnalysisRecord:
         filename=result.get("filename", "unknown"),
         fileSize=result.get("fileSize") or result.get("file_size") or 0,
         uploadTimestamp=ts,
-        status=AnalysisStatus.Complete,
+        status=status,
         overallScore=result.get("overallScore") or result.get("overall_score") or 0,
         verdict=verdict,
         forensic=forensic_data,
@@ -620,7 +642,17 @@ async def get_user_history(
         results = await cursor.to_list()
     
     # Removed verbose logging
-    return [_doc_to_record(r) for r in results]
+    safe_results = []
+
+    for r in results:
+        try:
+            record = _doc_to_record(r)
+            if record:
+                safe_results.append(record)
+        except Exception as e:
+            print("[history] Skipped bad record:", e)
+
+    return safe_results
 
 
 @app.post("/analysis/submit", response_model=str)

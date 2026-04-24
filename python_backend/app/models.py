@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -13,6 +14,7 @@ class Verdict(str, Enum):
     Real = "Real"
     Uncertain = "Uncertain"
     Fake = "Fake"
+    Unknown = "Unknown"
 
 
 class FlaggedFrame(BaseModel):
@@ -22,11 +24,12 @@ class FlaggedFrame(BaseModel):
 
 
 class FrameAnalysis(BaseModel):
-    frameCount: int
-    flaggedFrames: list[FlaggedFrame]
-    resolution: str
-    frameRate: float
-    colorAnomalyScore: float
+    frameCount: int = 0
+    flaggedFrames: list[FlaggedFrame] = []
+    resolution: str = ""
+    frameRate: float = 0.0
+    colorAnomalyScore: float = 0.0
+    faceTrackingData: list = []
 
 
 class ForensicBreakdown(BaseModel):
