@@ -367,40 +367,36 @@ async def process_video_analysis(
 
                     print(f"[DEBUG] avg={avg:.3f}, std={std:.3f}, fake_ratio={fake_ratio:.3f}, peak={peak_suspicion:.3f}")
 
-                    # 0️⃣ 🔥 ULTRA-SMOOTH FAKE DETECTION (SAFE VERSION)
-                    # Requires some evidence of faking (fake_ratio > 0.10) to avoid flagging perfect real videos
-                    if avg < 0.25 and std < 0.05 and fake_ratio > 0.10:
+                    # --- FINAL PRIORITY LOGIC (V5.0 - NO CONFLICT) ---
+                    # 🔴 1. STRONG FAKE (Highest Priority)
+                    if avg > 0.70:
                         verdict = "Fake"
 
-                    # 1️⃣ VERY CLEAR REAL
-                    elif avg < 0.28 and fake_ratio < 0.25:
-                        verdict = "Real"
-
-                    # 2️⃣ VERY CLEAR FAKE
-                    elif avg > 0.72:
-                        verdict = "Fake"
-
-                    # 3️⃣ 🔥 ANIMATION / AI (MOST IMPORTANT FIX)
+                    # 🔴 2. ANIMATION / AI (CRITICAL FIX)
                     elif avg > 0.45 and std < 0.15:
                         verdict = "Fake"
 
-                    # 4️⃣ 🔥 PARTIAL DEEPFAKE (SPIKES)
+                    # 🔴 3. PARTIAL DEEPFAKE (spikes)
                     elif peak_suspicion > 0.92 and fake_ratio > 0.30:
                         verdict = "Fake"
 
-                    # 5️⃣ 🔥 MANY FAKE FRAMES
+                    # 🔴 4. MANY FAKE FRAMES
                     elif fake_ratio > 0.50:
                         verdict = "Fake"
 
-                    # 6️⃣ ✅ COMPRESSED REAL (WhatsApp FIX)
+                    # 🟢 5. CLEAR REAL
+                    elif avg < 0.30 and fake_ratio < 0.25:
+                        verdict = "Real"
+
+                    # 🟢 6. WHATSAPP REAL (Compression Fix)
                     elif avg < 0.55 and fake_ratio < 0.35:
                         verdict = "Real"
 
-                    # 7️⃣ ✅ NATURAL STABLE VIDEO
+                    # 🟢 7. STABLE REAL
                     elif std < 0.18 and avg < 0.50:
                         verdict = "Real"
 
-                    # 8️⃣ FINAL DECISION (NO MORE UNNECESSARY UNCERTAIN)
+                    # ⚪ 8. FINAL FALLBACK DECISION
                     elif avg < 0.65:
                         verdict = "Real"
                     else:
