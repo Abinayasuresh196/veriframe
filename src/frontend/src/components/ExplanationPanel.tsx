@@ -45,14 +45,14 @@ export function ExplanationPanel({
   const getExplanation = () => {
     switch (verdict) {
       case "FAKE":
-        return `Strong manipulation indicators detected. Average score ${overallScore}% exceeds 85% threshold with ≥50% frame consensus. High variance in frame scores suggests genuine manipulation patterns rather than compression noise.`;
+        return `High manipulation probability detected (${overallScore}%). The analysis identifies characteristic deepfake artifacts, inconsistent facial geometry, or non-natural smoothness. The score exceeds safe thresholds indicated by frame-level analysis and instability patterns.`;
       case "REAL":
-        if (overallScore > 65) {
-          return `Analysis indicates authentic content despite elevated scores. The ${overallScore}% average is offset by stable frame-to-frame consistency (std dev < 0.08) typical of WhatsApp-compressed real videos. Compression creates uniform noise patterns that the model recognizes as non-manipulative.`;
+        if (overallScore > 30) {
+          return `Analysis indicates authentic content despite minor noise. The ${overallScore}% risk score is attributed to compression artifacts (common in WhatsApp/social media), but stable frame-to-frame consistency confirms original footage.`;
         }
-        return `Clear authentic content detected. Average score ${overallScore}% below 65% threshold indicates genuine video with confidence. Frame scores show consistent patterns typical of real footage.`;
+        return `Highly authentic content detected. The low risk score (${overallScore}%) and consistent visual patterns indicate genuine video footage without detectable manipulation.`;
       default:
-        return `Ambiguous classification. Score ${overallScore}% falls in borderline range (65-85%). Mixed frame patterns or variable stability prevent confident verdict. This may indicate either a deepfake with inconsistent artifacts or a compressed real video with atypical noise patterns.`;
+        return `Inconclusive analysis. The ${overallScore}% score falls in an ambiguous range where model confidence is split. This usually results from heavy video degradation, low resolution, or mixed manipulation indicators that require manual review.`;
     }
   };
 

@@ -449,8 +449,8 @@ async def process_video_analysis(
                         # Strong fake consensus
                         elif fake_ratio > 0.5:
                             verdict = "Fake"
-                        # Stable real
-                        elif avg < 0.45 and std < 0.12:
+                        # Stable real (Loosened std threshold from 0.12 to 0.20 to favor compressed real videos)
+                        elif avg < 0.4 and std < 0.2:
                             verdict = "Real"
                         else:
                             verdict = "Uncertain"
