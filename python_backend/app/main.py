@@ -430,6 +430,7 @@ async def process_video_analysis(
                         std = float(np.std(trimmed))
 
                         fake_votes = int(np.sum(scores > 0.6))
+                        peak_suspicion = float(np.max(scores))
                         fake_ratio = fake_votes / len(scores)
 
                         # FINAL LOGIC
@@ -441,6 +442,10 @@ async def process_video_analysis(
                         # 🔥 ANIMATION DETECTION (IMPORTANT)
                         elif 0.45 <= avg <= 0.75 and std < 0.08:
                             verdict = "Fake"   # over-smooth animation
+                        # 🔥 PEAK ANOMALY DETECTION
+                        # (Handles videos with mixed real/fake segments where avg is low)
+                        elif fake_ratio > 0.3 and peak_suspicion > 0.9:
+                            verdict = "Fake"
                         # Strong fake consensus
                         elif fake_ratio > 0.5:
                             verdict = "Fake"
