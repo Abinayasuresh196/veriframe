@@ -2,9 +2,16 @@ import time
 import uuid
 import logging
 import random
+import os
+import subprocess
+import tempfile
+import requests
 from datetime import datetime
 from typing import Annotated
 
+import cv2
+import numpy as np
+import aiofiles
 from fastapi import FastAPI, Header, HTTPException, UploadFile, Form, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -19,6 +26,11 @@ from .models import (
     SubmitVideoRequest,
 )
 from .db import get_db
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
 
 # Configure logging to suppress uvicorn INFO logs
 logging.getLogger("uvicorn").setLevel(logging.WARNING)
@@ -62,8 +74,6 @@ async def simple_submit():
 @app.get("/debug/tensorflow")
 async def debug_tensorflow():
     """Simple TensorFlow test endpoint."""
-    import os
-    
     debug_info = {
         "tensorflow_available": False,
         "model_file_exists": False,
@@ -270,10 +280,8 @@ async def process_video_analysis(
                     {"$set": {"videoUrl": video_url}}
                 )
             
-            # We already have local_video_path from the submit route, skip download.
-            pass
-
-        import os, subprocess
+        # We already have local_video_path from the submit route, skip download.
+        pass
 
         # Optionally convert with ffmpeg if available (improves analysis quality)
         converted_video_path = local_video_path.replace(".mp4", "_converted.mp4")
@@ -312,7 +320,6 @@ async def process_video_analysis(
         if local_video_path:
             try:
                 # 🔥 FIX 1: Extract Real Metadata
-                import cv2
                 cap = cv2.VideoCapture(local_video_path)
                 v_fps = cap.get(cv2.CAP_PROP_FPS) or 30
                 v_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -347,7 +354,6 @@ async def process_video_analysis(
                     print(f"[background] ✅ Extracted {len(frames)} frames")
 
                     # ---- SAFE ANALYSIS ----
-                    import numpy as np
 
                     scores = np.array([r["suspicion_score"] for r in frame_results])
 
@@ -682,13 +688,6 @@ async def submit_video_analysis(
     owner = _resolve_owner(x_user_id)
 
     # Save uploaded file temporarily (streaming to prevent memory issues)
-    import tempfile
-    import os
-    import aiofiles
-    import time
-    import uuid
-    from .db import get_db
-    
     temp_file_path = None
     try:
         # Create temporary file and stream content
