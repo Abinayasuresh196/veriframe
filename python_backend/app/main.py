@@ -28,14 +28,9 @@ app = FastAPI(title=settings.app_name)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://veriframe-frontend.vercel.app",
-        "https://veriframe-frontend.vercel.app/",
-        "http://localhost:5173",
-        "http://localhost:5173/"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
