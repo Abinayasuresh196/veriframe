@@ -28,12 +28,16 @@ app = FastAPI(title=settings.app_name)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex="https://.*\.vercel\.app|http://localhost:.*",
+    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+@app.options("/{rest_of_path:path}")
+async def preflight_fallback(rest_of_path: str):
+    return {"status": "ok"}
 
 @app.get("/")
 def health():
@@ -217,12 +221,11 @@ async def login(payload: LoginRequest) -> AuthResponse | None:
 
 async def process_video_analysis(
     analysis_id: str,
-    user_id: str,
+    owner: str,
     filename: str,
     file_size: int,
     metadata: dict,
-    video_url: str,
-    video_path: str,
+    local_video_path: str,
     use_mongodb: bool
 ):
     """Background task to process video analysis."""
@@ -244,30 +247,32 @@ async def process_video_analysis(
     try:
         print(f"[background] Starting analysis for {filename}")
 
-        local_video_path = None  # Initialize to avoid UnboundLocalError
+        # --- CLOUDINARY UPLOAD (Moved to background) ---
+        from .cloudinary_service import get_cloudinary_service
+        cloudinary = get_cloudinary_service()
+        
+        print(f"[background] Uploading to Cloudinary: {local_video_path}")
+        video_url = await cloudinary.upload_video(
+            local_video_path,
+            public_id=f"{owner}_{filename}",
+            folder="veriframe/videos"
+        )
+        print(f"[background] Cloudinary upload finished: {video_url is not None}")
 
         if use_mongodb:
             from .analysis_mongodb import get_mongodb_analysis
             analysis = await get_mongodb_analysis()
             
-            # Process analysis with MongoDB
-            # Download video from Cloudinary for frame extraction
-            import requests
-            import tempfile
-            import os
-            from .frame_extractor import FrameExtractor
-            extracted_frames = {}
-            local_video_path = None
-            try:
-                print(f"[background] Downloading video from Cloudinary...")
-                # Download video from Cloudinary to local temp file
-                response = requests.get(video_url, stream=True, timeout=30)
-                response.raise_for_status()
-                
-                # Create temp file for video
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_video:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        temp_video.write(chunk)
+            # Update record with video URL early
+            if video_url:
+                await analysis.mongodb.database.analyses.update_one(
+                    {"id": analysis_id},
+                    {"$set": {"videoUrl": video_url}}
+                )
+            
+            # Download video (redundant now but we'll use local_video_path if it exists)
+            # We already have local_video_path, so we skip download.
+            pass
                     local_video_path = temp_video.name
                 
                 # Convert video using ffmpeg to fix corruption issues
@@ -362,7 +367,19 @@ async def process_video_analysis(
             
             # Variable initialization removed here as they are now at the top scope
             
-            # Always analyze frames and upload to Cloudinary (regardless of model availability)
+            # 🔥 FIX: Move Cloudinary upload here to speed up submission
+            from .cloudinary_service import get_cloudinary_service
+            cloudinary = get_cloudinary_service()
+            
+            print(f"[background] Uploading video to Cloudinary: {local_video_path}")
+            video_url = await cloudinary.upload_video(
+                local_video_path,
+                public_id=f"{owner}_{filename}",
+                folder="veriframe/videos"
+            )
+            print(f"[background] Cloudinary upload finished: {video_url is not None}")
+
+            # Always analyze frames and update status
             if local_video_path:
                 try:
                     # 🔥 FIX 1: Extract Real Metadata
@@ -724,8 +741,6 @@ async def submit_video_analysis(
         )
     
     # Removed verbose logging
-    
-    # Try MongoDB first, fallback to local storage
     use_mongodb = False
     try:
         analysis = await get_mongodb_analysis()
@@ -734,17 +749,15 @@ async def submit_video_analysis(
     except Exception:
         use_mongodb = False
     
-    if not use_mongodb:
-        print("[submit] MongoDB unavailable, using local storage")
-    
-    cloudinary = get_cloudinary_service()
     owner = _resolve_owner(x_user_id)
-    # Removed verbose logging
 
     # Save uploaded file temporarily (streaming to prevent memory issues)
     import tempfile
     import os
     import aiofiles
+    import time
+    import uuid
+    from .db import get_db
     
     temp_file_path = None
     try:
@@ -757,25 +770,6 @@ async def submit_video_analysis(
             chunk_size = 1024 * 1024  # 1MB chunks
             while chunk := await file.read(chunk_size):
                 await f.write(chunk)
-        # Removed verbose logging
-        
-        # Upload to Cloudinary
-        # Removed verbose logging
-        video_url = await cloudinary.upload_video(
-            temp_file_path,
-            public_id=f"{owner}_{filename}",
-            folder="veriframe/videos"
-        )
-        # Removed verbose logging
-        
-        if not video_url:
-            # Removed verbose logging
-            raise HTTPException(status_code=500, detail="Failed to upload video to Cloudinary")
-        
-        # Convert types safely
-        try:
-            file_size = int(fileSize) if fileSize else os.path.getsize(temp_file_path)
-        except (ValueError, TypeError):
             file_size = os.path.getsize(temp_file_path)
         
         try:
@@ -813,7 +807,7 @@ async def submit_video_analysis(
                 "verdict": "Processing",
                 "forensic": {},
                 "frameAnalysis": {},
-                "videoUrl": video_url,
+                "videoUrl": None,
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow()
             })
@@ -834,7 +828,7 @@ async def submit_video_analysis(
                 "verdict": "Processing",
                 "forensic": {},
                 "frameAnalysis": {},
-                "videoUrl": video_url,
+                "videoUrl": None,
                 "status": "pending"
             })
             
@@ -853,10 +847,11 @@ async def submit_video_analysis(
             filename or file.filename,
             file_size,
             metadata,
-            video_url,
             temp_file_path,
             use_mongodb
         )
+        
+        return analysis_id
         
         # Removed verbose logging
         
