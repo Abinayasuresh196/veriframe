@@ -367,9 +367,13 @@ async def process_video_analysis(
 
                     print(f"[DEBUG] avg={avg:.3f}, std={std:.3f}, fake_ratio={fake_ratio:.3f}, peak={peak_suspicion:.3f}")
 
-                    # --- FINAL PRIORITY LOGIC (V5.0 - NO CONFLICT) ---
+                    # --- FINAL PRIORITY LOGIC (V5.1 - NO CONFLICT) ---
+                    # 🔴 0. ULTRA-SMOOTH AI DETECTION (Catch low-avg animation)
+                    if std < 0.08 and avg > 0.35:
+                        verdict = "Fake"
+
                     # 🔴 1. STRONG FAKE (Highest Priority)
-                    if avg > 0.70:
+                    elif avg > 0.70:
                         verdict = "Fake"
 
                     # 🔴 2. ANIMATION / AI (CRITICAL FIX)
