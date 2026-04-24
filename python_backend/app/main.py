@@ -440,11 +440,13 @@ async def process_video_analysis(
 
                     # Select the most relevant 15 frames based on the final verdict
                     if verdict == "Fake":
-                        # Prioritize HIGHEST suspicion (evidence of tampering)
-                        flagged_frames = sorted(all_analyzed, key=lambda x: x["suspicionScore"], reverse=True)[:15]
+                        # Prioritize HIGHEST suspicion evidence of tampering, then filter strictly
+                        raw_selection = sorted(all_analyzed, key=lambda x: x["suspicionScore"], reverse=True)
+                        flagged_frames = [f for f in raw_selection if f["label"] == "Fake"][:15]
                     elif verdict == "Real":
-                        # Prioritize LOWEST suspicion (evidence of authenticity)
-                        flagged_frames = sorted(all_analyzed, key=lambda x: x["suspicionScore"])[:15]
+                        # Prioritize LOWEST suspicion evidence of authenticity, then filter strictly
+                        raw_selection = sorted(all_analyzed, key=lambda x: x["suspicionScore"])
+                        flagged_frames = [f for f in raw_selection if f["label"] == "Real"][:15]
                     else:
                         # Uncertain: Show the most ambiguous/suspicious frames for investigation
                         flagged_frames = sorted(all_analyzed, key=lambda x: x["suspicionScore"], reverse=True)[:15]
