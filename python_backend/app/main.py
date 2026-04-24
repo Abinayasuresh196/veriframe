@@ -407,25 +407,30 @@ async def process_video_analysis(
                         if std_val < 0.10 and avg_val > 0.35:
                             return "Fake"
 
-                        # 5. Ultra-smooth animation edge case
-                        #    Raw range is tiny → all frames identical → not real camera
-                        if range_val < 0.05:
+                        # 5. ✅ FIXED — Ultra-smooth animation
+                        # Must ALSO have avg above noise floor to be animation
+                        if range_val < 0.05 and avg_val > 0.20:
                             return "Fake"
 
                         # ══════════════════════════════════════════════════════════
                         # 🟢 REAL RULES
                         # ══════════════════════════════════════════════════════════
 
-                        # 6. Clear real — low avg, low fake frames
+                        # 6. ✅ NEW RULE — Low confidence = Real
+                        # Model is not confident at all → trust it as Real
+                        if avg_val < 0.20 and fr_val == 0:
+                            return "Real"
+
+                        # 7. Clear real — low avg, low fake frames
                         if avg_val < 0.30 and fr_val < 0.25:
                             return "Real"
 
-                        # 7. Compressed real (WhatsApp / low-bitrate)
+                        # 8. Compressed real (WhatsApp / low-bitrate)
                         #    Has natural variation despite compression
                         if avg_val < 0.55 and fr_val < 0.35 and std_val > 0.10:
                             return "Real"
 
-                        # 8. Natural camera variation — real videos shake/vary
+                        # 9. Natural camera variation — real videos shake/vary
                         if std_val > 0.18:
                             return "Real"
 
