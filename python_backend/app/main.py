@@ -419,26 +419,38 @@ async def process_video_analysis(
 
                     overall_score = int(avg * 100)
 
-                    # Update frame_analysis with flagged frames
-                    flagged_frames = []
-
+                    # --- VERDICT-AWARE FRAME SELECTION ---
+                    # Create a list of all potential frames with full metadata
+                    all_analyzed = []
                     for i, s in enumerate(scores):
                         score_val = float(s)
-                        # 🔥 FIX 2: Frame Label Logic
                         if score_val > 0.65:
                             f_label = "Fake"
                         elif score_val < 0.35:
                             f_label = "Real"
                         else:
                             f_label = "Uncertain"
+                        
+                        all_analyzed.append({
+                            "frameIndex": int(i),
+                            "suspicionScore": score_val,
+                            "label": f_label,
+                            "extractedFrame": extracted_frames.get(i)
+                        })
 
-                        if score_val > 0.6 and len(flagged_frames) < 15:
-                            flagged_frames.append({
-                                "frameIndex": int(i),
-                                "suspicionScore": score_val,
-                                "label": f_label,
-                                "extractedFrame": extracted_frames.get(i)
-                            })
+                    # Select the most relevant 15 frames based on the final verdict
+                    if verdict == "Fake":
+                        # Prioritize HIGHEST suspicion (evidence of tampering)
+                        flagged_frames = sorted(all_analyzed, key=lambda x: x["suspicionScore"], reverse=True)[:15]
+                    elif verdict == "Real":
+                        # Prioritize LOWEST suspicion (evidence of authenticity)
+                        flagged_frames = sorted(all_analyzed, key=lambda x: x["suspicionScore"])[:15]
+                    else:
+                        # Uncertain: Show the most ambiguous/suspicious frames for investigation
+                        flagged_frames = sorted(all_analyzed, key=lambda x: x["suspicionScore"], reverse=True)[:15]
+
+                    # Re-sort result by frame index for chronological display
+                    flagged_frames = sorted(flagged_frames, key=lambda x: x["frameIndex"])
 
                     frame_analysis = {
                         "frameCount": v_frame_count or len(scores),
