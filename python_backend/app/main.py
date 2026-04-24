@@ -270,212 +270,191 @@ async def process_video_analysis(
                     {"$set": {"videoUrl": video_url}}
                 )
             
-            # We already have local_video_path, so we skip download.
+            # We already have local_video_path from the submit route, skip download.
             pass
-        
-        # Convert video using ffmpeg to fix corruption issues
-                        
-                        # Validate converted video
-                        import cv2
-                        cap = cv2.VideoCapture(converted_video_path)
-                        frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                        fps = cap.get(cv2.CAP_PROP_FPS)
-                        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                        cap.release()
-                        
-                        print(f"[background] Converted video metadata - Frames: {frames}, FPS: {fps}, Resolution: {width}x{height}")
-                        
-                        if frames > 0:
-                            # Use converted video
-                            os.unlink(local_video_path)
-                            local_video_path = converted_video_path
-                            print(f"[background] ✅ Video converted successfully")
-                        else:
-                            print(f"[background] ⚠️ Converted video still has 0 frames, using original")
-                            os.unlink(converted_video_path)
-                    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-                        print(f"[background] ⚠️ FFmpeg conversion failed, using original video: {e}")
-                        if os.path.exists(converted_video_path):
-                            os.unlink(converted_video_path)
-            except Exception as e:
-                print(f"[background] Video download/conversion failed: {e}")
 
-            # Analyze with model using downloaded video
-            from .deepfake_model import get_deepfake_model
-            model = get_deepfake_model()
-            print(f"[background] Model available: {model.is_available()}, Video path exists: {local_video_path is not None}")
-            
-            # Initialize frame_analysis with default values to prevent scoping errors
-            frame_analysis = {
-                "frameCount": 0,
-                "flaggedFrames": [],
-                "resolution": "",
-                "frameRate": 0,
-                "colorAnomalyScore": 0,
-                "faceTrackingData": []
-            }
-            
-            # Variable initialization removed here as they are now at the top scope
-            
-            # 🔥 FIX: Move Cloudinary upload here to speed up submission
-            from .cloudinary_service import get_cloudinary_service
-            cloudinary = get_cloudinary_service()
-            
-            print(f"[background] Uploading video to Cloudinary: {local_video_path}")
-            video_url = await cloudinary.upload_video(
-                local_video_path,
-                public_id=f"{owner}_{filename}",
-                folder="veriframe/videos"
+        import os, subprocess
+
+        # Optionally convert with ffmpeg if available (improves analysis quality)
+        converted_video_path = local_video_path.replace(".mp4", "_converted.mp4")
+        try:
+            subprocess.run(
+                ["ffmpeg", "-i", local_video_path,
+                 "-vf", "scale=640:480,fps=30",
+                 "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                 "-c:a", "aac", "-movflags", "+faststart",
+                 converted_video_path, "-y"],
+                check=True, capture_output=True, timeout=60
             )
-            print(f"[background] Cloudinary upload finished: {video_url is not None}")
+            if os.path.exists(converted_video_path):
+                local_video_path = converted_video_path
+                print(f"[background] ✅ Video converted successfully")
+        except Exception as e:
+            print(f"[background] ⚠️ FFmpeg not available or failed, using original: {e}")
 
-            # Always analyze frames and update status
-            if local_video_path:
-                try:
-                    # 🔥 FIX 1: Extract Real Metadata
-                    import cv2
-                    cap = cv2.VideoCapture(local_video_path)
-                    v_fps = cap.get(cv2.CAP_PROP_FPS) or 30
-                    v_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                    v_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    v_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    cap.release()
-                    
-                    v_resolution = f"{int(v_width)}x{int(v_height)}" if v_width > 0 else "640x480"
 
-                    # 🔥 FIX 4: Increase Frames
-                    frame_results = model.analyze_video_frames(local_video_path, max_frames=20)
-                    print(f"[background] Model analysis returned {len(frame_results) if frame_results else 0} frame results")
-                    
-                    if frame_results and len(frame_results) > 0:
-                        print(f"[background] Processing {len(frame_results)} frames")
+        # Analyze with model using downloaded video
+        from .deepfake_model import get_deepfake_model
+        model = get_deepfake_model()
+        print(f"[background] Model available: {model.is_available()}, Video path exists: {local_video_path is not None}")
 
-                        from .frame_extractor import FrameExtractor
-                        extractor = FrameExtractor()
-                        model_frame_indices = [r["frame_index"] for r in frame_results]
+        # Initialize frame_analysis with default values to prevent scoping errors
+        frame_analysis = {
+            "frameCount": 0,
+            "flaggedFrames": [],
+            "resolution": "",
+            "frameRate": 0,
+            "colorAnomalyScore": 0,
+            "faceTrackingData": []
+        }
 
-                        frames = extractor.extract_frames(
-                            local_video_path,
-                            num_frames=min(len(model_frame_indices), 20),
-                            quality=95,
-                            filename=filename,
-                            frame_indices=model_frame_indices
-                        )
+        # Always analyze frames and update status
+        if local_video_path:
+            try:
+                # 🔥 FIX 1: Extract Real Metadata
+                import cv2
+                cap = cv2.VideoCapture(local_video_path)
+                v_fps = cap.get(cv2.CAP_PROP_FPS) or 30
+                v_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                v_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                v_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                cap.release()
+                
+                v_resolution = f"{int(v_width)}x{int(v_height)}" if v_width > 0 else "640x480"
 
-                        for frame_idx, frame_url in frames:
-                            extracted_frames[frame_idx] = frame_url
+                # 🔥 FIX 4: Increase Frames
+                frame_results = model.analyze_video_frames(local_video_path, max_frames=20)
+                print(f"[background] Model analysis returned {len(frame_results) if frame_results else 0} frame results")
+                
+                if frame_results and len(frame_results) > 0:
+                    print(f"[background] Processing {len(frame_results)} frames")
 
-                        print(f"[background] ✅ Extracted {len(frames)} frames")
+                    from .frame_extractor import FrameExtractor
+                    extractor = FrameExtractor()
+                    model_frame_indices = [r["frame_index"] for r in frame_results]
 
-                        # ---- SAFE ANALYSIS ----
-                        import numpy as np
+                    frames = extractor.extract_frames(
+                        local_video_path,
+                        num_frames=min(len(model_frame_indices), 20),
+                        quality=95,
+                        filename=filename,
+                        frame_indices=model_frame_indices
+                    )
 
-                        scores = np.array([r["suspicion_score"] for r in frame_results])
+                    for frame_idx, frame_url in frames:
+                        extracted_frames[frame_idx] = frame_url
 
-                        min_s = float(np.min(scores))
-                        max_s = float(np.max(scores))
+                    print(f"[background] ✅ Extracted {len(frames)} frames")
 
-                        if max_s - min_s < 1e-6:
-                            scores = np.zeros_like(scores)
-                        else:
-                            scores = (scores - min_s) / (max_s - min_s)
+                    # ---- SAFE ANALYSIS ----
+                    import numpy as np
 
-                        sorted_scores = np.sort(scores)
-                        n = len(sorted_scores)
+                    scores = np.array([r["suspicion_score"] for r in frame_results])
 
-                        trimmed = sorted_scores[int(0.1*n):int(0.9*n)]
+                    min_s = float(np.min(scores))
+                    max_s = float(np.max(scores))
 
-                        if len(trimmed) == 0:
-                            trimmed = sorted_scores
-
-                        avg = float(np.mean(trimmed))
-                        std = float(np.std(trimmed))
-
-                        fake_votes = int(np.sum(scores > 0.6))
-                        peak_suspicion = float(np.max(scores))
-                        fake_ratio = fake_votes / len(scores)
-
-                        # Debug diagnostic prints for ML tuning
-                        print(f"[forensic] AVG: {avg:.4f}, STD: {std:.4f}, FAKE_RATIO: {fake_ratio:.4f}, PEAK: {peak_suspicion:.4f}")
-
-                        # FINAL LOGIC
-                        # --- FINAL SMART LOGIC (BEST VERSION) ---
-                        if avg < 0.25:
-                            verdict = "Real"
-                        elif avg > 0.75:
-                            verdict = "Fake"
-                        # 🔥 Animation detection (Widened from 0.08 to 0.15)
-                        elif 0.45 <= avg <= 0.75 and std < 0.15:
-                            verdict = "Fake"
-                        # 🔥 Hidden smooth fake (Low variation suspicion)
-                        elif std < 0.12 and avg > 0.4:
-                            verdict = "Fake"
-                        # 🔥 Peak anomaly detection
-                        elif fake_ratio > 0.3 and peak_suspicion > 0.9:
-                            verdict = "Fake"
-                        # Strong fake consensus
-                        elif fake_ratio > 0.5:
-                            verdict = "Fake"
-                        # Stable real (Handles WhatsApp compression noise patterns)
-                        elif avg < 0.4 and std < 0.2:
-                            verdict = "Real"
-                        else:
-                            verdict = "Uncertain"
-
-                        # 🔥 FIX 3: Dynamic Forensic Breakdown
-                        forensic = {
-                            "deepfakeProbability": float(avg),
-                            "frameInsertionRisk": float(avg * 0.8),
-                            "frameDeletionRisk": float(avg * 0.6),
-                            "temporalInconsistencyScore": float(std),
-                            "compressionArtifactScore": float(std * 0.5),
-                            "audioVideoSyncScore": 0.5
-                        }
-
-                        overall_score = int(avg * 100)
-
-                        # Update frame_analysis with flagged frames
-                        flagged_frames = []
-
-                        for i, s in enumerate(scores):
-                            score_val = float(s)
-                            # 🔥 FIX 2: Frame Label Logic
-                            if score_val > 0.65:
-                                f_label = "Fake"
-                            elif score_val < 0.35:
-                                f_label = "Real"
-                            else:
-                                f_label = "Uncertain"
-
-                            if score_val > 0.6 and len(flagged_frames) < 15:
-                                flagged_frames.append({
-                                    "frameIndex": int(i),
-                                    "suspicionScore": score_val,
-                                    "label": f_label,
-                                    "extractedFrame": extracted_frames.get(i)
-                                })
-
-                        frame_analysis = {
-                            "frameCount": v_frame_count or len(scores),
-                            "flaggedFrames": flagged_frames,
-                            "resolution": v_resolution,
-                            "frameRate": float(v_fps),
-                            "colorAnomalyScore": float(std),
-                            "faceTrackingData": []
-                        }
-
+                    if max_s - min_s < 1e-6:
+                        scores = np.zeros_like(scores)
                     else:
-                        print("[background] No frame results, fallback")
-                        overall_score = 50
+                        scores = (scores - min_s) / (max_s - min_s)
+
+                    sorted_scores = np.sort(scores)
+                    n = len(sorted_scores)
+
+                    trimmed = sorted_scores[int(0.1*n):int(0.9*n)]
+
+                    if len(trimmed) == 0:
+                        trimmed = sorted_scores
+
+                    avg = float(np.mean(trimmed))
+                    std = float(np.std(trimmed))
+
+                    fake_votes = int(np.sum(scores > 0.6))
+                    peak_suspicion = float(np.max(scores))
+                    fake_ratio = fake_votes / len(scores)
+
+                    # Debug diagnostic prints for ML tuning
+                    print(f"[forensic] AVG: {avg:.4f}, STD: {std:.4f}, FAKE_RATIO: {fake_ratio:.4f}, PEAK: {peak_suspicion:.4f}")
+
+                    # FINAL LOGIC
+                    # --- FINAL SMART LOGIC (BEST VERSION) ---
+                    if avg < 0.25:
+                        verdict = "Real"
+                    elif avg > 0.75:
+                        verdict = "Fake"
+                    # 🔥 Animation detection (Widened from 0.08 to 0.15)
+                    elif 0.45 <= avg <= 0.75 and std < 0.15:
+                        verdict = "Fake"
+                    # 🔥 Hidden smooth fake (Low variation suspicion)
+                    elif std < 0.12 and avg > 0.4:
+                        verdict = "Fake"
+                    # 🔥 Peak anomaly detection
+                    elif fake_ratio > 0.3 and peak_suspicion > 0.9:
+                        verdict = "Fake"
+                    # Strong fake consensus
+                    elif fake_ratio > 0.5:
+                        verdict = "Fake"
+                    # Stable real (Handles WhatsApp compression noise patterns)
+                    elif avg < 0.4 and std < 0.2:
+                        verdict = "Real"
+                    else:
                         verdict = "Uncertain"
 
-                except Exception as e:
-                    print("[background] ERROR:", e)
+                    # 🔥 FIX 3: Dynamic Forensic Breakdown
+                    forensic = {
+                        "deepfakeProbability": float(avg),
+                        "frameInsertionRisk": float(avg * 0.8),
+                        "frameDeletionRisk": float(avg * 0.6),
+                        "temporalInconsistencyScore": float(std),
+                        "compressionArtifactScore": float(std * 0.5),
+                        "audioVideoSyncScore": 0.5
+                    }
+
+                    overall_score = int(avg * 100)
+
+                    # Update frame_analysis with flagged frames
+                    flagged_frames = []
+
+                    for i, s in enumerate(scores):
+                        score_val = float(s)
+                        # 🔥 FIX 2: Frame Label Logic
+                        if score_val > 0.65:
+                            f_label = "Fake"
+                        elif score_val < 0.35:
+                            f_label = "Real"
+                        else:
+                            f_label = "Uncertain"
+
+                        if score_val > 0.6 and len(flagged_frames) < 15:
+                            flagged_frames.append({
+                                "frameIndex": int(i),
+                                "suspicionScore": score_val,
+                                "label": f_label,
+                                "extractedFrame": extracted_frames.get(i)
+                            })
+
+                    frame_analysis = {
+                        "frameCount": v_frame_count or len(scores),
+                        "flaggedFrames": flagged_frames,
+                        "resolution": v_resolution,
+                        "frameRate": float(v_fps),
+                        "colorAnomalyScore": float(std),
+                        "faceTrackingData": []
+                    }
+
+                else:
+                    print("[background] No frame results, fallback")
                     overall_score = 50
                     verdict = "Uncertain"
 
-            # Update analysis record
+            except Exception as e:
+                print("[background] ERROR:", e)
+                overall_score = 50
+                verdict = "Uncertain"
+
+        # Update analysis record
+        if use_mongodb:
             # Convert extractedFrames integer keys to strings for MongoDB compatibility
             extracted_frames_str_keys = {str(k): v for k, v in extracted_frames.items()}
             await analysis.mongodb.database.analyses.update_one(
@@ -498,8 +477,8 @@ async def process_video_analysis(
             db = get_db()
             
             # Simulate analysis for local storage
-            overall_score = 50
-            verdict = "Uncertain"
+            overall_score = overall_score or 50
+            verdict = verdict or "Uncertain"
             
             await db["analyses"].update_one(
                 {"id": analysis_id},
