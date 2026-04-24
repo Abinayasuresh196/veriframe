@@ -270,59 +270,10 @@ async def process_video_analysis(
                     {"$set": {"videoUrl": video_url}}
                 )
             
-            # Download video (redundant now but we'll use local_video_path if it exists)
             # We already have local_video_path, so we skip download.
             pass
-                    local_video_path = temp_video.name
-                
-                # Convert video using ffmpeg to fix corruption issues
-                print(f"[background] Converting video with ffmpeg...")
-                converted_video_path = local_video_path.replace(".mp4", "_converted.mp4")
-                import subprocess
-                
-                # Try to find ffmpeg - check PATH first, then common Windows locations
-                ffmpeg_cmd = "ffmpeg"
-                common_paths = [
-                    r"C:\ffmpeg\ffmpeg-2026-04-09-git-d3d0b7a5ee-essentials_build\bin\ffmpeg.exe",
-                    r"C:\ffmpeg\bin\ffmpeg.exe",
-                    r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
-                    r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
-                ]
-                
-                # Check if ffmpeg is in PATH
-                try:
-                    subprocess.run(["ffmpeg", "-version"], check=True, capture_output=True, timeout=5)
-                    ffmpeg_cmd = "ffmpeg"
-                    print(f"[background] FFmpeg found in PATH")
-                except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-                    # Try common Windows locations
-                    for path in common_paths:
-                        if os.path.exists(path):
-                            ffmpeg_cmd = path
-                            print(f"[background] FFmpeg found at: {path}")
-                            break
-                    else:
-                        print(f"[background] ⚠️ FFmpeg not found in PATH or common locations")
-                        print(f"[background] ⚠️ Please install FFmpeg and add to PATH, or specify full path")
-                        print(f"[background] ⚠️ Skipping conversion, using original video")
-                        ffmpeg_cmd = None
-                
-                if ffmpeg_cmd:
-                    try:
-                        subprocess.run([
-                            ffmpeg_cmd, "-i", local_video_path,
-                            "-vf", "hqdn3d=3:2:3,scale=640:480,fps=30",
-                            "-c:v", "libx264",
-                            "-pix_fmt", "yuv420p",
-                            "-c:a", "aac",
-                            "-movflags", "+faststart",
-                            converted_video_path,
-                            "-y"
-                        ], check=True, capture_output=True, timeout=60)
-                        
-                        # Safety check - verify output file was created
-                        if not os.path.exists(converted_video_path):
-                            raise Exception("FFmpeg conversion failed - output file not created")
+        
+        # Convert video using ffmpeg to fix corruption issues
                         
                         # Validate converted video
                         import cv2
