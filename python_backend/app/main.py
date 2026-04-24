@@ -353,61 +353,91 @@ async def process_video_analysis(
 
                     print(f"[background] ✅ Extracted {len(frames)} frames")
 
-                    # ---- SAFE ANALYSIS (PRODUCTION STABLE V4.1) ----
+                    # --- FINAL STABLE FORENSIC LOGIC (V7 - WITH NORMALIZATION) ---
                     import numpy as np
-                    scores = np.array([r["suspicion_score"] for r in frame_results])
 
-                    # Safety: prevent extreme spikes ruining logic
-                    peak_suspicion = float(np.max(scores))
-                    scores = np.where(scores > 0.98, 0.95, scores)
+                    scores = np.array([r["suspicion_score"] for r in frame_results], dtype=np.float32)
 
-                    avg = float(np.mean(scores))
-                    std = float(np.std(scores))
+                    # ── NORMALIZATION ──────────────────────────────────────────
+                    # Clip outliers first, then min-max normalize to [0, 1]
+                    scores = np.clip(scores, 0.0, 1.0)
+
+                    s_min = float(np.min(scores))
+                    s_max = float(np.max(scores))
+
+                    if s_max - s_min > 0.01:  # avoid division by near-zero
+                        scores = (scores - s_min) / (s_max - s_min)
+                    else:
+                        # Flat signal — all frames nearly identical score
+                        # Keep as-is but flag it (ultra-smooth, likely animation)
+                        pass
+
+                    # ── DERIVED STATS (POST-NORMALIZATION) ────────────────────
+                    peak       = float(np.max(scores))
+                    avg        = float(np.mean(scores))
+                    std        = float(np.std(scores))
+                    raw_avg    = float(np.mean(np.clip(np.array([r["suspicion_score"] for r in frame_results], dtype=np.float32), 0.0, 1.0)))  # sanity ref
                     fake_ratio = float(np.sum(scores > 0.6)) / len(scores)
 
-                    print(f"[DEBUG] avg={avg:.3f}, std={std:.3f}, fake_ratio={fake_ratio:.3f}, peak={peak_suspicion:.3f}")
+                    # Pre-normalization range width (key animation signal)
+                    score_range = s_max - s_min
 
-                    # --- FINAL STABLE FORENSIC LOGIC (V6 - CLEAN & SAFE) ---
-                    def get_verdict(avg_val, std_val, fr_val, peak_val):
-                        # 🔴 1. STRONG FAKE
+                    print(f"[DEBUG] avg={avg:.3f}, std={std:.3f}, fake_ratio={fake_ratio:.3f}, "
+                          f"peak={peak:.3f}, range={score_range:.3f}")
+
+                    def get_verdict(avg_val, std_val, fr_val, peak_val, range_val):
+                        # ══════════════════════════════════════════════════════════
+                        # 🔴 FAKE RULES
+                        # ══════════════════════════════════════════════════════════
+
+                        # 1. Strong fake — model is consistently confident
                         if avg_val > 0.70:
                             return "Fake"
 
-                        # 🔴 2. DEEPFAKE SPIKES
+                        # 2. Deepfake spikes — short bursts of high confidence
                         if peak_val > 0.90 and fr_val > 0.30:
                             return "Fake"
 
-                        # 🔴 3. MANY FAKE FRAMES
+                        # 3. Many fake frames
                         if fr_val > 0.50:
                             return "Fake"
 
-                        # 🔴 4. ANIMATION / AI (MAIN RULE)
+                        # 4. Animation / AI-generated — smooth + mid-range avg
+                        #    (after normalization, animation scores cluster tightly)
                         if std_val < 0.10 and avg_val > 0.35:
                             return "Fake"
 
-                        # 🔴 5. ULTRA-PERFECT VIDEO (ANIMATION EDGE CASE)
-                        if std_val < 0.05 and avg_val < 0.25:
+                        # 5. Ultra-smooth animation edge case
+                        #    Raw range is tiny → all frames identical → not real camera
+                        if range_val < 0.05:
                             return "Fake"
 
-                        # 🟢 6. CLEAR REAL
+                        # ══════════════════════════════════════════════════════════
+                        # 🟢 REAL RULES
+                        # ══════════════════════════════════════════════════════════
+
+                        # 6. Clear real — low avg, low fake frames
                         if avg_val < 0.30 and fr_val < 0.25:
                             return "Real"
 
-                        # 🟢 7. COMPRESSED REAL (WhatsApp)
+                        # 7. Compressed real (WhatsApp / low-bitrate)
+                        #    Has natural variation despite compression
                         if avg_val < 0.55 and fr_val < 0.35 and std_val > 0.10:
                             return "Real"
 
-                        # 🟢 8. NATURAL VARIATION REAL
+                        # 8. Natural camera variation — real videos shake/vary
                         if std_val > 0.18:
                             return "Real"
 
-                        # ⚪ 9. FINAL DECISION (NO UNCERTAIN)
+                        # ══════════════════════════════════════════════════════════
+                        # ⚪ FINAL FALLBACK
+                        # ══════════════════════════════════════════════════════════
                         if avg_val < 0.60:
                             return "Real"
                         else:
                             return "Fake"
 
-                    verdict = get_verdict(avg, std, fake_ratio, peak_suspicion)
+                    verdict = get_verdict(avg, std, fake_ratio, peak, score_range)
 
                     # 🔥 FIX 3: Dynamic Forensic Breakdown
                     forensic = {
