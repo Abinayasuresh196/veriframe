@@ -367,44 +367,47 @@ async def process_video_analysis(
 
                     print(f"[DEBUG] avg={avg:.3f}, std={std:.3f}, fake_ratio={fake_ratio:.3f}, peak={peak_suspicion:.3f}")
 
-                    # --- FINAL PRIORITY LOGIC (V5.1 - NO CONFLICT) ---
-                    # 🔴 0. ULTRA-SMOOTH AI DETECTION (Catch low-avg animation)
-                    if std < 0.08 and avg > 0.35:
-                        verdict = "Fake"
+                    # --- FINAL STABLE FORENSIC LOGIC (V6 - CLEAN & SAFE) ---
+                    def get_verdict(avg_val, std_val, fr_val, peak_val):
+                        # 🔴 1. STRONG FAKE
+                        if avg_val > 0.70:
+                            return "Fake"
 
-                    # 🔴 1. STRONG FAKE (Highest Priority)
-                    elif avg > 0.70:
-                        verdict = "Fake"
+                        # 🔴 2. DEEPFAKE SPIKES
+                        if peak_val > 0.90 and fr_val > 0.30:
+                            return "Fake"
 
-                    # 🔴 2. ANIMATION / AI (CRITICAL FIX)
-                    elif avg > 0.45 and std < 0.15:
-                        verdict = "Fake"
+                        # 🔴 3. MANY FAKE FRAMES
+                        if fr_val > 0.50:
+                            return "Fake"
 
-                    # 🔴 3. PARTIAL DEEPFAKE (spikes)
-                    elif peak_suspicion > 0.92 and fake_ratio > 0.30:
-                        verdict = "Fake"
+                        # 🔴 4. ANIMATION / AI (MAIN RULE)
+                        if std_val < 0.10 and avg_val > 0.35:
+                            return "Fake"
 
-                    # 🔴 4. MANY FAKE FRAMES
-                    elif fake_ratio > 0.50:
-                        verdict = "Fake"
+                        # 🔴 5. ULTRA-PERFECT VIDEO (ANIMATION EDGE CASE)
+                        if std_val < 0.05 and avg_val < 0.25:
+                            return "Fake"
 
-                    # 🟢 5. CLEAR REAL
-                    elif avg < 0.30 and fake_ratio < 0.25:
-                        verdict = "Real"
+                        # 🟢 6. CLEAR REAL
+                        if avg_val < 0.30 and fr_val < 0.25:
+                            return "Real"
 
-                    # 🟢 6. WHATSAPP REAL (Compression Fix)
-                    elif avg < 0.55 and fake_ratio < 0.35:
-                        verdict = "Real"
+                        # 🟢 7. COMPRESSED REAL (WhatsApp)
+                        if avg_val < 0.55 and fr_val < 0.35 and std_val > 0.10:
+                            return "Real"
 
-                    # 🟢 7. STABLE REAL
-                    elif std < 0.18 and avg < 0.50:
-                        verdict = "Real"
+                        # 🟢 8. NATURAL VARIATION REAL
+                        if std_val > 0.18:
+                            return "Real"
 
-                    # ⚪ 8. FINAL FALLBACK DECISION
-                    elif avg < 0.65:
-                        verdict = "Real"
-                    else:
-                        verdict = "Fake"
+                        # ⚪ 9. FINAL DECISION (NO UNCERTAIN)
+                        if avg_val < 0.60:
+                            return "Real"
+                        else:
+                            return "Fake"
+
+                    verdict = get_verdict(avg, std, fake_ratio, peak_suspicion)
 
                     # 🔥 FIX 3: Dynamic Forensic Breakdown
                     forensic = {
