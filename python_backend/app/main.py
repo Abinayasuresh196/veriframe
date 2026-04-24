@@ -367,9 +367,9 @@ async def process_video_analysis(
 
                     print(f"[DEBUG] avg={avg:.3f}, std={std:.3f}, fake_ratio={fake_ratio:.3f}, peak={peak_suspicion:.3f}")
 
-                    # 0️⃣ 🔥 ULTRA-SMOOTH FAKE DETECTION (NEW FIX)
-                    # Catches "too perfect" AI/Animation that looks like a clean real video
-                    if avg < 0.25 and std < 0.05:
+                    # 0️⃣ 🔥 ULTRA-SMOOTH FAKE DETECTION (SAFE VERSION)
+                    # Requires some evidence of faking (fake_ratio > 0.10) to avoid flagging perfect real videos
+                    if avg < 0.25 and std < 0.05 and fake_ratio > 0.10:
                         verdict = "Fake"
 
                     # 1️⃣ VERY CLEAR REAL
