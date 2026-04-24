@@ -60,7 +60,9 @@ export function TimelineView({ frames, totalFrames, frameRate, onFrameClick, sel
   }, [frames]);
 
   const formatTime = (frameNum: number) => {
-    const seconds = frameNum / frameRate;
+    // 🔥 FIX 5: Fix Infinity/NaN
+    const rate = Number.isFinite(frameRate) && frameRate > 0 ? frameRate : 30;
+    const seconds = frameNum / rate;
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;

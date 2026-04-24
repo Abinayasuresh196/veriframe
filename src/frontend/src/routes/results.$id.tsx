@@ -256,10 +256,16 @@ function FrameThumbnail({
   const bg = FRAME_PALETTE[index % FRAME_PALETTE.length];
   const barW = `${pct}%`;
   
-  // Frame verdict is based on overall verdict, not individual scores
-  // If overall verdict is Real, all frames are Real (weighted system considers stability)
-  const fv = overallVerdict === "Real" 
-    ? { verdict: "REAL", label: "REAL", textClass: "text-real", bgClass: "bg-real", borderClass: "border-real" }
+  // 🔥 FIX 2: Priority Backend Labeling
+  const backendLabel = frame.label?.toUpperCase() as "FAKE" | "REAL" | "UNCERTAIN";
+  const fv = backendLabel 
+    ? { 
+        verdict: backendLabel, 
+        label: backendLabel, 
+        textClass: `text-${backendLabel.toLowerCase()}`, 
+        bgClass: `bg-${backendLabel.toLowerCase()}`, 
+        borderClass: `border-${backendLabel.toLowerCase()}` 
+      }
     : frameVerdict(frame.suspicionScore);
 
   // Use only Cloudinary URL from backend (no local extraction)
@@ -363,7 +369,9 @@ function FrameThumbnail({
       <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm rounded px-2 py-1">
         <span className="font-mono text-[10px] text-muted-foreground">
           {(() => {
-            const seconds = Number(frame.frameIndex) / frameRate;
+            // 🔥 FIX 5: Fix Infinity/NaN
+            const rate = Number.isFinite(frameRate) && frameRate > 0 ? frameRate : 30;
+            const seconds = Number(frame.frameIndex) / rate;
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             return `${mins}:${secs.toString().padStart(2, '0')}`;

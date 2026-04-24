@@ -20,6 +20,7 @@ class Verdict(str, Enum):
 class FlaggedFrame(BaseModel):
     frameIndex: int
     suspicionScore: float
+    label: str = "Uncertain"
     extractedFrame: str | None = None
 
 

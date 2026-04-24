@@ -21,6 +21,7 @@ export enum Verdict {
 export interface FlaggedFrame {
   frameIndex: bigint;
   suspicionScore: number;
+  label?: string;
   extractedFrame?: string;
 }
 
