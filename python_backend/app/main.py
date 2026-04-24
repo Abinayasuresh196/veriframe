@@ -393,8 +393,8 @@ async def process_video_analysis(
                         verdict = "Real"
                     elif avg > 0.75:
                         verdict = "Fake"
-                    # 🔥 Animation detection
-                    elif 0.45 <= avg <= 0.75 and std < 0.08:
+                    # 🔥 Animation detection (Widened from 0.08 to 0.15 for better coverage)
+                    elif 0.45 <= avg <= 0.75 and std < 0.15:
                         verdict = "Fake"
                     # 🔥 Strong fake peaks (real deepfake)
                     elif fake_ratio > 0.3 and peak_suspicion > 0.9:
@@ -406,7 +406,8 @@ async def process_video_analysis(
                     elif avg <= 0.60 and fake_ratio < 0.45:
                         verdict = "Real"
                     # ✅ Stable real (low variation)
-                    elif std < 0.20:
+                    # ONLY treat as Real if average suspicion is also reasonably low
+                    elif avg < 0.45 and std < 0.20:
                         verdict = "Real"
                     else:
                         verdict = "Uncertain"
