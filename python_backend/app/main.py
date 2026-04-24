@@ -430,16 +430,19 @@ async def process_video_analysis(
                         fake_ratio = fake_votes / len(scores)
 
                         # FINAL LOGIC
-                        # 🔥 FIX 6: FINAL VERDICT LOGIC
+                        # --- FINAL SMART LOGIC ---
                         if avg < 0.25:
                             verdict = "Real"
                         elif avg > 0.75:
                             verdict = "Fake"
+                        # 🔥 ANIMATION DETECTION (IMPORTANT)
                         elif 0.45 <= avg <= 0.75 and std < 0.08:
-                            verdict = "Fake"   # animation detection
+                            verdict = "Fake"   # over-smooth animation
+                        # Strong fake consensus
                         elif fake_ratio > 0.5:
                             verdict = "Fake"
-                        elif avg < 0.45:
+                        # Stable real
+                        elif avg < 0.45 and std < 0.12:
                             verdict = "Real"
                         else:
                             verdict = "Uncertain"
